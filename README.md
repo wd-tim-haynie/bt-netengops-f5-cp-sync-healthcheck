@@ -14,7 +14,7 @@ In some environments, it is possible that synchronization is not critical, and t
 
 ## Requirements
 
-1. **Timestamp Validation:** The script checks whether the replication timestamp is within the range of the F5. It's imperative that the F5 and ClearPass clocks are synchronized using NTP.
+1. **NTP:** The script checks whether the replication timestamp is within the range of the F5. It's imperative that the F5 and ClearPass clocks are synchronized using NTP.
 2. **API Client Creation:** As the script makes calls to the API, an API client needs to be set up on ClearPass. This client can be allocated an operator profile with minimal permissions to ensure security.
 3. **Same Cluster:** It's assumed that all ClearPasses within the same pool belong to the same ClearPass cluster, as monitoring synchronization across different clusters wouldn't make much sense.
 
@@ -44,15 +44,15 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
         - Click `Import`.
 
 **3. Set Up the Monitor Object:**
-    a. In BIG-IP, go to `Local Traffic > Monitors`.
-    b. Click `Create`.
-        i. Name your monitor, e.g., `ClearPass Sync`.
-        ii. Define `Type` as `External`.
-        iii. For `External Program`, select your script file (`f5-cp-sync-check.py` in this scenario).
-        iv. Within `Variables`, type `CLIENT_ID` (remember it's case sensitive) for the Name. Use the API Client name you earlier set in ClearPass as the Value (e.g., `F5_CP_SYNC_HEALTHCHECK`), then press `Add`.
-        v. For the next variable, type `CLIENT_SECRET` in the Name field. Paste the secret you saved from ClearPass in the `Value` section, then click `Add`.
-        vi. If using a wildcard (0) port for pool members, switch `Configuration` from Basic to Advanced, then set the `Alias Service Port` to `443`.
-        vii. Click `Finished`.
+    * In BIG-IP, go to `Local Traffic > Monitors`.
+    * Click `Create`.
+        - Name your monitor, e.g., `ClearPass Sync`.
+        - Define `Type` as `External`.
+        - For `External Program`, select your script file (`f5-cp-sync-check.py` in this scenario).
+        - Within `Variables`, type `CLIENT_ID` (remember it's case sensitive) for the Name. Use the API Client name you earlier set in ClearPass as the Value (e.g., `F5_CP_SYNC_HEALTHCHECK`), then press `Add`.
+        - For the next variable, type `CLIENT_SECRET` in the Name field. Paste the secret you saved from ClearPass in the `Value` section, then click `Add`.
+        - If using a wildcard (0) port for pool members, switch `Configuration` from Basic to Advanced, then set the `Alias Service Port` to `443`.
+        - Click `Finished`.
 
 **4. Assign to Pool:**
     a. On BIG-IP, navigate to `Local Traffic > Virtual Servers > Pools`.
