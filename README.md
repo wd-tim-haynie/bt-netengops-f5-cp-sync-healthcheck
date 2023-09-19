@@ -1,57 +1,64 @@
-# ClearPass Sync Healthcheck Monitor Readme
+# ClearPass Sync Healthcheck Monitor for F5 BIG-IP
 
 ## Introduction
-This README offers a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script. While ClearPass might function seamlessly concerning RADIUS and HTTPS operations, synchronization issues can surface, leading to problems like unauthenticated guest accounts or unregistered devices. To address this, the F5 external health monitor proactively flags ClearPass servers that have sync discrepancies.
 
-The script executes an API call to the targeted server, inspecting the last replication timestamp to ascertain synchronization with the broader network. Its rigorous error-handling mechanisms ensure that a server is only recognized as "up" when synchronization is verified. Additionally, the script seamlessly manages OAuth tokens, and provides detailed logging.
+The `f5-cp-sync-check.py` script serves as an F5 external monitor, designed to verify the synchronization status of a whether a ClearPass node in an F5 resource pool is synchronized with the rest of the ClearPass cluster. This check goes above and beyond the recommended health checks proposed in the "Deploying CPPM with F5 BIG-IP Local Traffic Manager (LTM)" guide, which hasn't been updated since 2014. While ClearPass might function seamlessly concerning RADIUS and HTTPS operations, synchronization issues can surface due to server reboots or LAN/WAN outages, leading to problems authenticating guest accounts, registering devices, or other operations that are dependant on a synchronized cluster. To address this, this F5 external health monitor proactively flags ClearPass servers that have sync discrepancies. By employing this script, you gain a robust method to monitor the sync status of the ClearPass infrastructure, surpassing the monitoring capabilities of the Aruba recommended RADIUS and HTTPS monitors.
+
+This README serves as a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script. The script executes an API call to the targeted server, inspecting the last replication timestamp to ascertain synchronization with the broader network. Its rigorous error-handling mechanisms ensure that a server is only recognized as "up" when synchronization is verified. Additionally, the script seamlessly manages OAuth tokens, and provides detailed logging.
+
+## Intended Usage
+
+This script and the monitor object it gets associated with are intended for use to monitor ClearPass nodes in a GTM/LTM resource pool where cluster synchronization for their authentication purposes. Commonly, this would include any server which provides authentication service for Guest or Onboard users and devices, or any service that relies on an up-to-date Endpoint database. These are just examples, and there may be other use cases where synchronization is critical.
+
+In some environments, it is possible that synchronization is not critical, and this script would not provide value. One such example would be a server which only provides 802.1X service which authenticates a user with Active Directory. If the service does not call any local databases on ClearPass (e.g., the Endpoint database) that are critical to update receive updates in near-real-time, it may not be relevant if the server is out of sync as it will not impact the authentication result.
 
 ## Requirements
 
 1. **Timestamp Validation:** The script checks whether the replication timestamp is within the range of the F5. It's imperative that the F5 and ClearPass clocks are synchronized using NTP.
 2. **API Client Creation:** As the script makes calls to the API, an API client needs to be set up on ClearPass. This client can be allocated an operator profile with minimal permissions to ensure security.
-3. **Same Cluster:** It's assumed that all ClearPasses within the same pool belong to the same ClearPass cluster. This ensures that access tokens can be universally applied across multiple ClearPass servers.
+3. **Same Cluster:** It's assumed that all ClearPasses within the same pool belong to the same ClearPass cluster, as monitoring synchronization across different clusters wouldn't make much sense.
 
 ## Quick Setup
 
 These steps are designed to quickly set up the healthcheck. Please note that this guide serves as a foundational reference only. You might need to adjust some settings depending on your security and monitoring requirements and preferences.
 
-**1. Create API Client on ClearPass:**
-   a. Log into ClearPass Guest.
-   b. Head to `Administration > API Services > API Clients`.
-   c. Click on `Create API Client`.
-      i. Label the client in the `Client ID` field (Save this name for future reference). For instance: `F5_CP_SYNC_HEALTHCHECK`.
-      ii. Ensure the `Enabled` option is checked.
-      iii. Set the `Operating Mode` to `ClearPass REST API - this client will be utilized for API calls to ClearPass`.
-      iv. Set `Operator Profile` to `Super Administrator` (You can refine this to a more restricted profile later on).
-      v. Choose `Grant Type: Client credentials`.
-      vi. Store the `Client Secret` in a text editor for future use.
-   d. Click `Create API Client`.
+1. **Create API Client on ClearPass:**
+    * Log into ClearPass Guest.
+    * Navigate to `Administration > API Services > API Clients`.
+    * Click on `Create API Client`.
+        - Label the client in the `Client ID` field (Save this name for future reference). For instance: `F5_CP_SYNC_HEALTHCHECK`.
+        - Ensure the `Enabled` option is checked.
+        - Set the `Operating Mode` to `ClearPass REST API - this client will be utilized for API calls to ClearPass`.
+        - Set `Operator Profile` to `Super Administrator` (You can refine this to a more restricted profile later on).
+        - Choose `Grant Type: Client credentials`.
+        - Store the `Client Secret` in a text editor for future use.
+    * Click `Create API Client`.
 
-**2. Import the Script:**
-   a. Download the `cp-sync-healthcheck.py` file from this repository.
-   b. Access your BIG-IP interface.
-   c. Proceed to `System > File Management > External Monitor Program File List`.
-   d. Hit `Import`.
-      i. Locate the `cp-sync-healthcheck.py` file.
-      ii. Assign a descriptive name to the file in the `Name` field (for example, you can set it to the filename for simplicity).
-      iii. Press `Import`.
+2. **Import the Script:**
+    * Download the `f5-cp-sync-check.py` file from this repository.
+    * Access your BIG-IP interface.
+    * Proceed to `System > File Management > External Monitor Program File List`.
+    * Click `Import`.
+        - Locate the `f5-cp-sync-check.py` file.
+        - Assign a descriptive name to the file in the `Name` field (for example, you can set it to the filename for simplicity).
+        - Click `Import`.
 
 **3. Set Up the Monitor Object:**
-   a. In BIG-IP, go to `Local Traffic > Monitors`.
-   b. Hit `Create`.
-      i. Name your monitor, e.g., `ClearPass Sync`.
-      ii. Define `Type` as `External`.
-      iii. For `External Program`, select your script file (`cp-sync-healthcheck.py` in this scenario).
-      iv. Within `Variables`, type `CLIENT_ID` (remember it's case sensitive) for the Name. Use the API Client name you earlier set in ClearPass as the Value (e.g., `F5_CP_SYNC_HEALTHCHECK`), then press `Add`.
-      v. For the next variable, type `CLIENT_SECRET` in the Name field. Paste the secret you saved from ClearPass in the `Value` section, then click `Add`.
-      vi. If using a wildcard (0) port for pool members, switch `Configuration` from Basic to Advanced, then set the `Alias Service Port` to `443`.
-      vii. Click `Finished`.
+    a. In BIG-IP, go to `Local Traffic > Monitors`.
+    b. Click `Create`.
+        i. Name your monitor, e.g., `ClearPass Sync`.
+        ii. Define `Type` as `External`.
+        iii. For `External Program`, select your script file (`f5-cp-sync-check.py` in this scenario).
+        iv. Within `Variables`, type `CLIENT_ID` (remember it's case sensitive) for the Name. Use the API Client name you earlier set in ClearPass as the Value (e.g., `F5_CP_SYNC_HEALTHCHECK`), then press `Add`.
+        v. For the next variable, type `CLIENT_SECRET` in the Name field. Paste the secret you saved from ClearPass in the `Value` section, then click `Add`.
+        vi. If using a wildcard (0) port for pool members, switch `Configuration` from Basic to Advanced, then set the `Alias Service Port` to `443`.
+        vii. Click `Finished`.
 
 **4. Assign to Pool:**
-   a. On BIG-IP, navigate to `Local Traffic > Virtual Servers > Pools`.
-   b. Find and select your designated pool.
-   c. Within the `Health Monitors` section, transfer your newly created monitor from the `Available` column to the `Active` column.
-   d. Click `Update`.
+    a. On BIG-IP, navigate to `Local Traffic > Virtual Servers > Pools`.
+    b. Find and select your designated pool.
+    c. Within the `Health Monitors` section, transfer your newly created monitor from the `Available` column to the `Active` column.
+    d. Click `Update`.
 
 ## Advanced Configurations
 ### Operator Profile:
@@ -96,6 +103,7 @@ Log messages for errors and troubleshooting can be found in `/var/log/ltm`.
 - The script does not handle encrypted client secrets currently. The client secret will be visible to anyone who can view the configuration, and will be bundled as part of a qkview.
 - If there's a change in token lifetime, the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`.
 - The BIG-IP only has python 2.7 available. Therefore, is not easy to import external modules.
+- ClearPass only updates the Last Replication Timestamp once every 3 minutes. Although unlikely, this implies that the maximum amount of time it takes for a server to be marked `Down` is 3 minutes + the monitor timeout. As such, it is important that other monitors (such as RADIUS, HTTPS, and ping) are used in conjunction with this monitor, since these services might go down sooner. Fortunately, the monitor usually won't take this long to mark a server `Down` since getting no API response from the server is considered a `Down` state. But, if the RADIUS service crashed on the server, this monitor will not be able to detect that
 
 ## Troubleshooting
 Check the `/var/log/ltm` logs for detailed information on script errors or issues. This is the most useful resource for checking why a node is failing its healthcheck. Use `tail -f /var/log/ltm` from the bash shell to watch logs in real time.
