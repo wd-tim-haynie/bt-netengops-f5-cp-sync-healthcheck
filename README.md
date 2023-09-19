@@ -8,7 +8,7 @@ This README serves as a detailed guide on utilizing, deploying, and troubleshoot
 
 ## Intended Usage
 
-This script and the monitor object it gets associated with are intended for use to monitor ClearPass nodes in a GTM/LTM resource pool where cluster synchronization for their authentication purposes. Commonly, this would include any server which provides authentication service for Guest or Onboard users and devices, or any service that relies on an up-to-date Endpoint database. These are just examples, and there may be other use cases where synchronization is critical.
+This script and the monitor object it gets associated with are intended for use to monitor ClearPass nodes in a GTM/LTM resource pool where cluster synchronization is critical for their authentication purposes. Commonly, this would include any server which provides authentication service for Guest or Onboard users and devices, or any service that relies on an up-to-date Endpoint database. These are just examples, and there may be other use cases where synchronization is critical.
 
 In some environments, it is possible that synchronization is not critical, and this script would not provide value. One such example would be a server which only provides 802.1X service which authenticates a user with Active Directory. If the service does not call any local databases on ClearPass (e.g., the Endpoint database) that are critical to update receive updates in near-real-time, it may not be relevant if the server is out of sync as it will not impact the authentication result.
 
@@ -100,10 +100,11 @@ The script will mark a node down for any of the following reasons:
 Log messages for errors and troubleshooting can be found in `/var/log/ltm`.
 
 ## Limitations
-- The script does not handle encrypted client secrets currently. The client secret will be visible to anyone who can view the configuration, and will be bundled as part of a qkview.
-- If there's a change in token lifetime, the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`.
+- The script does not handle encrypted client secrets currently. The client secret will be visible to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth.
+- If there's a change in token lifetime, the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`. Alternatively, you could wait for the token to expire, but this could take a long time.
 - The BIG-IP only has python 2.7 available. Therefore, is not easy to import external modules.
-- ClearPass only updates the Last Replication Timestamp once every 3 minutes. Although unlikely, this implies that the maximum amount of time it takes for a server to be marked `Down` is 3 minutes + the monitor timeout. As such, it is important that other monitors (such as RADIUS, HTTPS, and ping) are used in conjunction with this monitor, since these services might go down sooner. Fortunately, the monitor usually won't take this long to mark a server `Down` since getting no API response from the server is considered a `Down` state. But, if the RADIUS service crashed on the server, this monitor will not be able to detect that
+- ClearPass only updates the Last Replication Timestamp once every 3 minutes. This implies that the maximum amount of time it potentially takes for a server to be marked `Down` is 3 minutes + the monitor timeout. This is unlikely, however, because the script marks a resource `Down` if it gets no HTTP response during the API calls, but it is worth noting. Therefore, make sure this isn't the only monitor in your resource pool.
+- Updating the ClearPass infrastructure will cause databases to be out of sync for a while. It may make sense to disable the monitor in each ClearPass zone during a maintenance window so that the entire infrastructure doesn't get flagged as `Down` simultaneously.
 
 ## Troubleshooting
 Check the `/var/log/ltm` logs for detailed information on script errors or issues. This is the most useful resource for checking why a node is failing its healthcheck. Use `tail -f /var/log/ltm` from the bash shell to watch logs in real time.
