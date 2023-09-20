@@ -78,7 +78,7 @@ It would be a best security practice to implement a locked down operator profile
 It is advisable to put a link to this repository in the description field of your API client since this README is the only source of documentation for the monitor.
 
 #### Token Lifetime
-Even though new tokens are being obtained from the subscriber, the token itself is still generated on the publisher and is therefore subject to replication delay. The subscriber does not store the token that is obtained during the API call to get a new token. Therefore, it is recommended that the lifetime of the token must be at least 30 seconds in order to overcome replication delay. In addition, the token lifetime and exceed both the monitor interval and configured `BUFFER_TIME` (10 minutes/600 seconds by default).
+Even though new tokens are being obtained from the subscriber, the token itself is still generated on the publisher and is therefore subject to replication delay. The subscriber does not store the token that is obtained during the API call to get a new token. Therefore, it is recommended that the lifetime of the token must be at least 30 seconds in order to overcome replication delay. In addition, the token lifetime and exceed both the monitor `Interval` and configured `BUFFER_TIME` (10 minutes/600 seconds by default).
 
 The default token lifetime of 8 hours is likely acceptable for most environments that don't have security requirements that dictate shorter token lifetimes.
 
@@ -97,11 +97,11 @@ The default monitor configuration sets a 5-second `Interval`, a setting the scri
 
 For example, if the monitor `Interval` is 10 seconds, you should set the variable `MON_INTERVAL` to 10, and a replication timestamp older than 3 minutes and 15 seconds will be considered invalid.
 
-The monitor interval must be at least 2 seconds, but it not recommended to reduce this lower than 5 seconds. It **must** also be _less_ than `BUFFER_TIME`.
+The monitor `Interval` must be at least 2 seconds, but it not recommended to reduce this lower than 5 seconds. It **must** also be _less_ than `BUFFER_TIME`.
 
 F5's best practice for a monitor `Timeout` is 3x the monitor `Interval` plus 1 second (for a 10 second `Interval`, the `Timeout` should be 31).
 
-Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 to 185 seconds between the subscriber and the rest of the cluster. This will cause the monitor to fail that cycle. However, at the next `Interval`, the monitor will succeed because the replication timestamps will be updated. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
+Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 to 185 seconds between the subscriber and the rest of the cluster. This race condition will cause the monitor to fail that `Interval`. However, at the next `Interval`, the monitor will succeed because the replication timestamps will be updated. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
 
 #### Monitor `Description`
 It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
@@ -109,8 +109,8 @@ It is advisable to put a link to this repository in the description field of you
 #### Monitor `Variables`
 - `CLIENT_SECRET`: Mandatory. Client's secret key for API authentication. This will be visible in clear text in the current version of this script.
 - `CLIENT_ID`: Mandatory. Client ID name for ClearPass API authentication.
-- `BUFFER_TIME`: Time buffer for token renewal. If a token is set to expire in less time than this variable, a new token will be retrieved and stored for future use. 10 minutes (600 seconds) by default if not specified. **Must** be _less_ than token lifetime configured on the API client and greater than the monitor interval. Recommended minimum of 25 seconds to overcome replication delay.
-- `MON_INTERVAL`: Interval for monitoring in seconds. **Must** match the internal configured on the monitor itself; see `Monitor Interval` section. 5 seconds by default if not specified. **Must** be _less_ than the token lifetime and greater than 1. Not recommended to be less than 5.
+- `BUFFER_TIME`: Time buffer for token renewal. If a token is set to expire in less time than this variable, a new token will be retrieved and stored for future use. 10 minutes (600 seconds) by default if not specified. **Must** be _less_ than token lifetime configured on the API client and greater than the monitor `Interval`. Recommended minimum of 25 seconds to overcome replication delay.
+- `MON_INTERVAL`: Interval for monitoring in seconds. **Must** match the internal configured on the monitor itself; see `Monitor Interval and Timeout` section. 5 seconds by default if not specified. **Must** be _less_ than the token lifetime and greater than 1. Not recommended to be less than 5.
 
 #### Monitor `Alias Service Port`
 If your pool uses a wildcard (0) port for its members, you must assign the `Alias Service Port` as `443`. To set this value, you will need to switch the `Configuration` view from `Basic` to `Advanced`. You might see a warning when trying to change the monitor which reads `Cannot modify the address type of monitor /Common/<monitor name>` or a warning trying to assign the monitor to the pool which says `The monitor /Common/<monitor name> has a wildcard destination service and cannot be associated with a node that has a zero service.`.
@@ -121,19 +121,19 @@ The script only uses "client credentials" authentication, so a reauth token is n
 
 When the script loads, the script will look in its token file for an existing unexpired token. If a valid token is unavailable, a new token will be retrieved using OAuth. A new token will also be obtained if the expiration of the existing token is within `BUFFER_TIME`, but the oldest token will always be used until 5 seconds before expiration. 
 
-The script then makes a call to the ClearPass server to retrieve the last replication timestamp for each node in the cluster. If the last replication timestamp of the ClearPass server in question is less than 10 seconds older than the highest replication timestamp in the cluster, AND the highest replication timestamp is newer than 3 minutes, 5 seconds + MON_INTERVAL based on the system clock of the F5, the monitor will mark the node as `Up`.
+The script then makes a call to the ClearPass server to retrieve the last replication timestamp for each node in the cluster. If the last replication timestamp of the ClearPass server in question is less than 10 seconds older than the highest replication timestamp in the cluster, AND the highest replication timestamp is newer than 3 minutes, 5 seconds + `MON_INTERVAL` based on the system clock of the F5, the monitor will mark the node as `Up`.
 
 The publisher will always be marked as `Up` if the API call was successful.
 
 ## Limitations
 - The script does support encrypted client secrets currently. The client secret will be visible in plain text to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth. Secret encryption will be available in a future version. Regardless, it is strongly recommended to set an Operator Profile with the minimum required permissions on the API client so that the secret cannot be used for any other purpose.
-- Monitor interval must be passed manually to the script using the `MON_INTERVAL` variable as there is no way to obtain this information automatically and the script is dependant on this value.
+- Monitor `Interval` must be passed manually to the script using the `MON_INTERVAL` variable as there is no way to obtain this information automatically, and because the script is dependant on this value.
 - The script will not attempt to obtain a new token if it receives any HTTP 4xx errors as replication delay can cause newly generated valid tokens to not yet be available on the subscriber.
 - If there's a change in token lifetime (for example, changing settings on the API Client configuration will invalidate existing tokens), the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`. Alternatively, you could wait for the token to reach its scheduled expiration time, but this could take a long time depending on how much time was left on the original token. An invalidated token will cause the script to throw an HTTP 4xx error (note the previous limitation).
 - The BIG-IP only has python 2.7 available, and it is not easy to import external modules.
-- ClearPass only updates the Last Replication Timestamp once every 3 minutes. This implies that the maximum amount of time it potentially takes for a server to be marked `Down` is 3 minutes + the monitor timeout. This is unlikely, however, because the script marks a resource `Down` if it gets no HTTP response during the API calls, but it is worth noting. Therefore, make sure this isn't the only monitor in your resource pool.
+- ClearPass only updates the Last Replication Timestamp once every 3 minutes. This implies that the maximum amount of time it potentially takes for a server to be marked `Down` is 3 minutes + the monitor `Timeout`. This is unlikely, however, because the script marks a resource `Down` if it gets no HTTP response during the API calls, but it is worth noting. Therefore, make sure this isn't the only monitor in your resource pool.
 - Updating the ClearPass infrastructure will cause databases to be out of sync for a while. It may make sense to disable the monitor in each ClearPass zone during a maintenance window so that the entire infrastructure doesn't get flagged as `Down` simultaneously.
-- Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 or 185 seconds between the subscriber and the rest of the cluster. This will cause the monitor to fail. However, at the next interval, the monitor will succeed. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
+- Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 or 185 seconds between the subscriber and the rest of the cluster. This race condition will cause the monitor to fail for that `Interval`. However, at the next `Interval`, the monitor will succeed. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
 
 ## Troubleshooting
 Check the `/var/log/ltm` logs for detailed information on script errors or issues. This is the most useful resource for checking why a node is failing its healthcheck. Use `tail -f /var/log/ltm` from the bash shell to watch logs in real time.
