@@ -2,9 +2,11 @@
 
 ## Introduction
 
-The `f5-cp-sync-check.py` script serves as an F5 external monitor designed to verify the synchronization status of a whether a ClearPass node in an F5 resource pool is synchronized with the rest of the ClearPass cluster. This check goes above and beyond the recommended health checks proposed in the "Deploying CPPM with F5 BIG-IP Local Traffic Manager (LTM)" guide, which hasn't been updated since 2014. While ClearPass might function seamlessly concerning RADIUS and HTTPS operations, synchronization issues can surface due to server reboots or LAN/WAN outages, leading to problems authenticating guest accounts, registering devices, or other operations that are dependant on a synchronized cluster. To address this, this F5 external health monitor proactively removes ClearPass servers that have sync discrepancies from their associated resource pools. By employing this script, you gain a robust method to monitor the sync status of the ClearPass infrastructure, surpassing the monitoring capabilities of the Aruba recommended RADIUS and HTTPS monitors.
+The `f5-cp-sync-check.py` script serves as an F5 external monitor designed to verify the synchronization status of a whether a ClearPass node in an F5 resource pool is synchronized with the rest of the ClearPass cluster. This check goes above and beyond the recommended health checks proposed in the "Deploying CPPM with F5 BIG-IP Local Traffic Manager (LTM)" guide, which hasn't been updated since 2014. While ClearPass might appear to function seamlessly concerning RADIUS and HTTPS operations, synchronization issues due to server reboots or LAN/WAN outages can lead to problems authenticating guest accounts, registering devices, or other operations that are dependant on a synchronized cluster.
 
-This README serves as a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script. The script executes an API call to the targeted server, inspecting the last replication timestamp to ascertain synchronization with the broader network. Its rigorous error-handling mechanisms ensure that a server is only recognized as `Up` when synchronization is verified. Additionally, the script seamlessly manages OAuth tokens, and provides detailed logging.
+To address this, this F5 external health monitor proactively removes ClearPass servers that have sync discrepancies from their associated resource pools. By employing this script, you gain a robust method to monitor the sync status of the ClearPass infrastructure, surpassing the monitoring capabilities of the Aruba recommended RADIUS and HTTPS monitors.
+
+This README serves as a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script. The script executes an API call to the target server and compares the last replication timestamp of the server to the rest of the cluster. Its rigorous error-handling mechanisms ensure that a server is only recognized as `Up` when synchronization is verified. Additionally, the script seamlessly manages OAuth tokens, and provides detailed logging.
 
 It is advisable to put a link to this repository in the description field of your monitor and the description field of the API client since this README is the only source of documentation for the monitor.
 
@@ -91,11 +93,11 @@ No other permissions are required for the API Client operator profile.
 
 ### BIG-IP Monitor Configuration:
 #### Monitor Interval
-The default monitor configuration sets a 5-second interval, a setting the script inherently assumes. However, if there's a need to modify the monitor interval, it's critical to define a variable called `MON_INTERVAL` that matches the desired interval. This adjustment is crucial as the script determines the freshness of the replication timestamp relative to the BIG-IP system time, but there is no mechanism for the script to determine the monitor interval from the F5 automatically. Given that ClearPass only refreshes the replication timestamp every 3 minutes, we allow for 3 minutes + the monitor interval + 5 seconds (a hard coded value to account for clock variances) to consider if a replication timestamp is new enough.
+The default monitor configuration sets a 5-second interval, a setting the script inherently assumes. However, if there's a need to modify the monitor interval, it's critical to define a variable called `MON_INTERVAL` that matches the desired interval. This adjustment is crucial as the script determines the freshness of the replication timestamp relative to the BIG-IP system time, but there is no mechanism for the script to determine the monitor interval from the F5 automatically. Given that ClearPass only refreshes the replication timestamp every 3 minutes, we allow for 3 minutes + the monitor interval + 5 seconds (a hard coded value to account for clock variances) to consider if the maximum replication timestamp in the cluster is new enough.
 
 For example, if the monitor interval is 10 seconds, you should set the variable `MON_INTERVAL` to 10, and a replication timestamp older than 3 minutes and 15 seconds will be considered invalid.
 
-The monitor interval must be at least 2 seconds.
+The monitor interval must be at least 2 seconds, but it not recommended to reduce this lower than 5 seconds. It **must** also be _less_ than `BUFFER_TIME`.
 
 F5's best practice for a monitor timeout is 3x the monitor interval plus 1 second (for a 10 second interval, the timeout should be 31).
 
@@ -105,8 +107,8 @@ It is advisable to put a link to this repository in the description field of you
 #### Monitor Variables
 - `CLIENT_SECRET`: Mandatory. Client's secret key for API authentication. This will be visible in clear text in the current version of this script.
 - `CLIENT_ID`: Mandatory. Client ID name for ClearPass API authentication.
-- `BUFFER_TIME`: Time buffer for token renewal. If a token is set to expire in less time than this variable, a new token will be retrieved and stored for future use. 10 minutes (600 seconds) by default if not specified. **Must** be less than token lifetime configured on the API client and greater than the monitor interval. Recommended minimum of 25 seconds to overcome replication delay.
-- `MON_INTERVAL`: Interval for monitoring in seconds. **Must** match the internal configured on the monitor itself. 5 seconds by default if not specified. Must be less than the token lifetime and greater than 1.
+- `BUFFER_TIME`: Time buffer for token renewal. If a token is set to expire in less time than this variable, a new token will be retrieved and stored for future use. 10 minutes (600 seconds) by default if not specified. **Must** be _less_ than token lifetime configured on the API client and greater than the monitor interval. Recommended minimum of 25 seconds to overcome replication delay.
+- `MON_INTERVAL`: Interval for monitoring in seconds. **Must** match the internal configured on the monitor itself; see `Monitor Interval` section. 5 seconds by default if not specified. **Must** be _less_ than the token lifetime and greater than 1. Not recommended to be less than 5.
 
 ## Behavior and Error Detection
 
