@@ -80,9 +80,9 @@ The monitor interval must be at least 2 seconds. F5's best practice for a monito
 
 ### Script Variables
 
-- `CLIENT_SECRET`: Manditory. Client's secret key for API authentication. This will be visible in clear text in the current version of this script
+- `CLIENT_SECRET`: Manditory. Client's secret key for API authentication. This will be visible in clear text in the current version of this script.
 - `CLIENT_ID`: Manditory. Client ID name for ClearPass API authentication.
-- `BUFFER_TIME`: Time buffer for token refresh. 10 minutes by default if not specified. Must be less than token lifetime configured on the API client and greater than the monitor interval. Recommended minimum of 1 minute.
+- `BUFFER_TIME`: Time buffer for token refresh. 10 minutes (600 seconds) by default if not specified. Must be less than token lifetime configured on the API client and greater than the monitor interval. Recommended minimum of 25 seconds to overcome replication delay.
 - `MON_INTERVAL`: Interval for monitoring in seconds. Must match the internal configured on the monitor itself. 5 seconds by default if not specified. Must be less than the token lifetime and greater than 1.
 
 ### Token Lifetime
@@ -100,8 +100,10 @@ When the script loads, the script will look in its token file for an existing un
 The script then makes a call to the ClearPass server to retrieve the last replication timestamp for each node in the cluster. If the last replication timestamp of the ClearPass server in question is less than 10 seconds older than the highest replication timestamp in the cluster, AND the highest replication timestamp is newer than 3 minutes, 5 seconds + MON_INTERVAL based on the system clock of the F5, the monitor will mark the node as UP.
 
 ## Limitations
-- The script does not handle encrypted client secrets currently. The client secret will be visible to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth.
-- If there's a change in token lifetime (for example, changing settings on the API Client configuration will invalidate existing tokens), the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`. Alternatively, you could wait for the token to expire, but this could take a long time depending on how much time was left on the original token. The script will not attempt to obtain a new token
+- The script does support encrypted client secrets currently. The client secret will be visible in plain text to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth. Password encryption will be available in a future version.
+- Monitor interval must be passed manually to the script using the `MON_INTERVAL` variable as there is no way to obtain this information automatically and the script is dependant on this value.
+- If there's a change in token lifetime (for example, changing settings on the API Client configuration will invalidate existing tokens), the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`. Alternatively, you could wait for the token to expire, but this could take a long time depending on how much time was left on the original token.
+- The script will not attempt to obtain a new token if it receives any HTTP 4xx errors as replication delay can cause newly generated valid tokens to not yet be available on the subscriber.
 - The BIG-IP only has python 2.7 available. Therefore, is not easy to import external modules.
 - ClearPass only updates the Last Replication Timestamp once every 3 minutes. This implies that the maximum amount of time it potentially takes for a server to be marked `Down` is 3 minutes + the monitor timeout. This is unlikely, however, because the script marks a resource `Down` if it gets no HTTP response during the API calls, but it is worth noting. Therefore, make sure this isn't the only monitor in your resource pool.
 - Updating the ClearPass infrastructure will cause databases to be out of sync for a while. It may make sense to disable the monitor in each ClearPass zone during a maintenance window so that the entire infrastructure doesn't get flagged as `Down` simultaneously.
@@ -113,11 +115,11 @@ The script will mark a node down for any of the following reasons:
 - `HTTP error`: Seen for several reason:
     * Insufficient permissions on the API Client operator profile
     * Out of sync nodes that don't have the most recent tokens from the publisher
-    * Tokens were invalidated due to changes on the API client
     * A very new token was generated and is not yet replicated to the subscriber
+    * Tokens were invalidated due to changes on the API client
     * Either CLIENT_ID or CLIENT_SECRET are missing or invalid
 - `URL Error`: Usually happens if the node hasn't started all of its services, or is hard down
-- `Timeout`: Caused by lack of response for an HTTP request for a token or replication timestamp
+- `Timeout`: Caused by lack of response for an HTTP request for a token or replication timestamp, and no ICMP message received to flag a `URL Error`
 - Unhandled reasons: Script fails to detect a known failure scenario
 
 Since the monitor will run every few seconds or minutes anyway, the script does not attempt to recover from any errors, including HTTP 4xx errors, and will mark the node `down`. This is because a 4xx error is returned if a brand new token is generated and used immediately, prior to cluster replication.
