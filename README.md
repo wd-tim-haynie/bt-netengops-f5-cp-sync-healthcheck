@@ -122,6 +122,7 @@ The publisher will always be marked as `Up` if the API call was successful.
 
 ## Limitations
 - The script does support encrypted client secrets currently. The client secret will be visible in plain text to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth. Secret encryption will be available in a future version.
+- It is strongly recommended to set an Operator Profile with the minimum required permissions on the API client.
 - Monitor interval must be passed manually to the script using the `MON_INTERVAL` variable as there is no way to obtain this information automatically and the script is dependant on this value.
 - If there's a change in token lifetime (for example, changing settings on the API Client configuration will invalidate existing tokens), the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`. Alternatively, you could wait for the token to reach its scheduled expiration time, but this could take a long time depending on how much time was left on the original token.
 - The script will not attempt to obtain a new token if it receives any HTTP 4xx errors as replication delay can cause newly generated valid tokens to not yet be available on the subscriber.
