@@ -101,6 +101,8 @@ The monitor interval must be at least 2 seconds, but it not recommended to reduc
 
 F5's best practice for a monitor timeout is 3x the monitor interval plus 1 second (for a 10 second interval, the timeout should be 31).
 
+Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 or 185 seconds between the subscriber and the rest of the cluster. This will cause the monitor to fail. However, at the next interval, the monitor will succeed. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
+
 #### Description
 It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
 
@@ -128,6 +130,7 @@ The publisher will always be marked as `Up` if the API call was successful.
 - The BIG-IP only has python 2.7 available, and it is not easy to import external modules.
 - ClearPass only updates the Last Replication Timestamp once every 3 minutes. This implies that the maximum amount of time it potentially takes for a server to be marked `Down` is 3 minutes + the monitor timeout. This is unlikely, however, because the script marks a resource `Down` if it gets no HTTP response during the API calls, but it is worth noting. Therefore, make sure this isn't the only monitor in your resource pool.
 - Updating the ClearPass infrastructure will cause databases to be out of sync for a while. It may make sense to disable the monitor in each ClearPass zone during a maintenance window so that the entire infrastructure doesn't get flagged as `Down` simultaneously.
+- Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 or 185 seconds between the subscriber and the rest of the cluster. This will cause the monitor to fail. However, at the next interval, the monitor will succeed. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
 
 ## Troubleshooting
 Check the `/var/log/ltm` logs for detailed information on script errors or issues. This is the most useful resource for checking why a node is failing its healthcheck. Use `tail -f /var/log/ltm` from the bash shell to watch logs in real time.
