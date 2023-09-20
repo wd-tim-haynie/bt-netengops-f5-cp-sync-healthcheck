@@ -125,7 +125,7 @@ The publisher will always be marked as `Up` if the API call was successful.
 - Monitor interval must be passed manually to the script using the `MON_INTERVAL` variable as there is no way to obtain this information automatically and the script is dependant on this value.
 - If there's a change in token lifetime (for example, changing settings on the API Client configuration will invalidate existing tokens), the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`. Alternatively, you could wait for the token to reach its scheduled expiration time, but this could take a long time depending on how much time was left on the original token.
 - The script will not attempt to obtain a new token if it receives any HTTP 4xx errors as replication delay can cause newly generated valid tokens to not yet be available on the subscriber.
-- The BIG-IP only has python 2.7 available. Therefore, is not easy to import external modules.
+- The BIG-IP only has python 2.7 available, and it is not easy to import external modules.
 - ClearPass only updates the Last Replication Timestamp once every 3 minutes. This implies that the maximum amount of time it potentially takes for a server to be marked `Down` is 3 minutes + the monitor timeout. This is unlikely, however, because the script marks a resource `Down` if it gets no HTTP response during the API calls, but it is worth noting. Therefore, make sure this isn't the only monitor in your resource pool.
 - Updating the ClearPass infrastructure will cause databases to be out of sync for a while. It may make sense to disable the monitor in each ClearPass zone during a maintenance window so that the entire infrastructure doesn't get flagged as `Down` simultaneously.
 
