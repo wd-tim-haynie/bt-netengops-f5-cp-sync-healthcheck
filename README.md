@@ -22,7 +22,7 @@ In some environments, it is possible that synchronization is not critical, and t
 
 ## Quick Setup
 
-These steps are designed to quickly set up the healthcheck. Please note that this section serves as a foundational reference only. You might need to adjust some settings depending on your security and monitoring requirements and preferences. See the Advanced Configuration section below for additional configuration options.
+These steps are designed to quickly set up the healthcheck. Please note that this section serves as a foundational reference only. You might need to adjust some settings depending on your security and monitoring requirements and preferences. See the `Advanced Configuration` section below for additional configuration options.
 
 1. **Create API Client on ClearPass:**
     * Log into ClearPass Guest.
