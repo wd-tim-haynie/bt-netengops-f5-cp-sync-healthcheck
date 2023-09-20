@@ -4,7 +4,7 @@
 
 The `f5-cp-sync-check.py` script serves as an F5 external monitor, designed to verify the synchronization status of a whether a ClearPass node in an F5 resource pool is synchronized with the rest of the ClearPass cluster. This check goes above and beyond the recommended health checks proposed in the "Deploying CPPM with F5 BIG-IP Local Traffic Manager (LTM)" guide, which hasn't been updated since 2014. While ClearPass might function seamlessly concerning RADIUS and HTTPS operations, synchronization issues can surface due to server reboots or LAN/WAN outages, leading to problems authenticating guest accounts, registering devices, or other operations that are dependant on a synchronized cluster. To address this, this F5 external health monitor proactively removes ClearPass servers that have sync discrepancies from their associated resource pools. By employing this script, you gain a robust method to monitor the sync status of the ClearPass infrastructure, surpassing the monitoring capabilities of the Aruba recommended RADIUS and HTTPS monitors.
 
-This README serves as a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script. The script executes an API call to the targeted server, inspecting the last replication timestamp to ascertain synchronization with the broader network. Its rigorous error-handling mechanisms ensure that a server is only recognized as "up" when synchronization is verified. Additionally, the script seamlessly manages OAuth tokens, and provides detailed logging.
+This README serves as a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script. The script executes an API call to the targeted server, inspecting the last replication timestamp to ascertain synchronization with the broader network. Its rigorous error-handling mechanisms ensure that a server is only recognized as `Up` when synchronization is verified. Additionally, the script seamlessly manages OAuth tokens, and provides detailed logging.
 
 ## Intended Usage
 
@@ -97,7 +97,9 @@ The script only uses "client credentials" authentication, so a reauth token is n
 
 When the script loads, the script will look in its token file for an existing unexpired token. If a valid token is unavailable, a new token will be retrieved using OAuth. A new token will also be obtained if the expiration of the existing token is within `BUFFER_TIME`, but the oldest token will always be used until 5 seconds before expiration. Under normal behavior, there should never be more than 2 tokens at a time in the token file, but if the token lifetime is less than `BUFFER_TIME`, the token file will fill with multiple tokens. This isn't harmful as it is unlikely to fill the disk, and the script will still find the oldest valid token, and automatically delete old tokens, but it is worth noting for troubleshooting purposes.
 
-The script then makes a call to the ClearPass server to retrieve the last replication timestamp for each node in the cluster. If the last replication timestamp of the ClearPass server in question is less than 10 seconds older than the highest replication timestamp in the cluster, AND the highest replication timestamp is newer than 3 minutes, 5 seconds + MON_INTERVAL based on the system clock of the F5, the monitor will mark the node as UP.
+The script then makes a call to the ClearPass server to retrieve the last replication timestamp for each node in the cluster. If the last replication timestamp of the ClearPass server in question is less than 10 seconds older than the highest replication timestamp in the cluster, AND the highest replication timestamp is newer than 3 minutes, 5 seconds + MON_INTERVAL based on the system clock of the F5, the monitor will mark the node as `Up`.
+
+The publisher will always be marked as `Up` if the API call was successful.
 
 ## Limitations
 - The script does support encrypted client secrets currently. The client secret will be visible in plain text to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth. Password encryption will be available in a future version.
@@ -111,7 +113,7 @@ The script then makes a call to the ClearPass server to retrieve the last replic
 ## Troubleshooting
 Check the `/var/log/ltm` logs for detailed information on script errors or issues. This is the most useful resource for checking why a node is failing its healthcheck. Use `tail -f /var/log/ltm` from the bash shell to watch logs in real time.
 
-The script will mark a node down for any of the following reasons:
+The script will mark a node `Down` for any of the following reasons:
 - `HTTP error`: Seen for several reason:
     * Insufficient permissions on the API Client operator profile
     * Out of sync nodes that don't have the most recent tokens from the publisher
@@ -122,7 +124,7 @@ The script will mark a node down for any of the following reasons:
 - `Timeout`: Caused by lack of response for an HTTP request for a token or replication timestamp, and no ICMP message received to flag a `URL Error`
 - Unhandled reasons: Script fails to detect a known failure scenario
 
-Since the monitor will run every few seconds or minutes anyway, the script does not attempt to recover from any errors, including HTTP 4xx errors, and will mark the node `down`. This is because a 4xx error is returned if a brand new token is generated and used immediately, prior to cluster replication.
+Since the monitor will run every few seconds or minutes anyway, the script does not attempt to recover from any errors, including HTTP 4xx errors, and will mark the node `Down`. This is because a 4xx error is returned if a brand new token is generated and used immediately, prior to cluster replication.
 
 ## About
 The monitor has been tested on the following versions:
