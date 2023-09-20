@@ -6,13 +6,13 @@ The `f5-cp-sync-check.py` script serves as an F5 external monitor, designed to v
 
 This README serves as a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script. The script executes an API call to the targeted server, inspecting the last replication timestamp to ascertain synchronization with the broader network. Its rigorous error-handling mechanisms ensure that a server is only recognized as `Up` when synchronization is verified. Additionally, the script seamlessly manages OAuth tokens, and provides detailed logging.
 
-It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
+It is advisable to put a link to this repository in the description field of your monitor and the description field of the API client since this README is the only source of documentation for the monitor.
 
 ## Intended Usage
 
 This script and the monitor object it gets associated with are intended for use to monitor ClearPass nodes in a GTM/LTM resource pool where cluster synchronization is critical for their authentication purposes. Commonly, this would include any server which provides authentication service for Guest or Onboard users and devices, or any service that relies on an up-to-date Endpoint database. These are just examples, and there may be other use cases where synchronization is critical.
 
-In some environments, it is possible that synchronization is not critical, and this script would not provide value. One such example would be a server which only provides 802.1X service which authenticates a user against Active Directory using EAP-TLS where the user certificates are signed by a non-ClearPass CA. If the service does not call any local databases on ClearPass (e.g., the Endpoint database) that are critical to update receive updates in near-real-time, it may not be relevant if the server is out of sync as it will not impact the authentication result.
+In some environments, it is possible that synchronization is not critical, and this script would not provide value. One such example would be a server which only provides 802.1X service which authenticates a user against Active Directory using EAP-TLS where the user certificates are signed by a non-ClearPass CA. If no services on the server refer to any local databases on ClearPass (e.g., the Endpoint database) that are critical to update receive updates in near-real-time, it may not be relevant if the server is out of sync as it will not impact the authentication result.
 
 ## Requirements
 
@@ -22,13 +22,14 @@ In some environments, it is possible that synchronization is not critical, and t
 
 ## Quick Setup
 
-These steps are designed to quickly set up the healthcheck. Please note that this guide serves as a foundational reference only. You might need to adjust some settings depending on your security and monitoring requirements and preferences.
+These steps are designed to quickly set up the healthcheck. Please note that this section serves as a foundational reference only. You might need to adjust some settings depending on your security and monitoring requirements and preferences. See the Advanced Configuration section below for additional configuration options.
 
 1. **Create API Client on ClearPass:**
     * Log into ClearPass Guest.
     * Navigate to `Administration > API Services > API Clients`.
     * Click on `Create API Client`.
         - Label the client in the `Client ID` field (Save this name for future reference). For instance: `F5_CP_SYNC_HEALTHCHECK`.
+        - In the `Description` field, put a link to this repository as it is the only source of documentation for the monitor.
         - Ensure the `Enabled` option is checked.
         - Set the `Operating Mode` to `ClearPass REST API - this client will be utilized for API calls to ClearPass`.
         - Set `Operator Profile` to `Super Administrator` (You can refine this to a more restricted profile later on).
@@ -64,6 +65,21 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
     * Click `Update`.
 
 ## Advanced Configurations
+### ClearPass API Client
+#### Grant Type
+Only "client credentials" are supported by the script.
+
+#### Operator Profile
+It would be a best security practice to implement a locked down operator profile to assign to the API client. See the `Operator Profile` section below.
+
+#### Description
+It is advisable to put a link to this repository in the description field of your API client since this README is the only source of documentation for the monitor.
+
+#### Token Lifetime
+Even though new tokens are being obtained from the subscriber, the token itself is still generated on the publisher and is therefore subject to replication delay. The subscriber does not store the token that is obtained during the API call to get a new token. Therefore, it is recommended that the lifetime of the token must be at least 30 seconds in order to overcome replication delay. In addition, the token lifetime and exceed both the monitor interval and configured `BUFFER_TIME` (10 minutes/600 seconds by default).
+
+The default token lifetime of 8 hours is likely acceptable for most environments that don't have security requirements that dictate shorter token lifetimes.
+
 ### Operator Profile:
 The operator profile assigned to the API Client must have the below permissions:
 - **API Services**: Set to `Custom`
@@ -73,25 +89,24 @@ The operator profile assigned to the API Client must have the below permissions:
 
 No other permissions are required for the API Client operator profile.
 
-### Monitor Configuration:
-The default monitor configuration operates on a 5-second interval, a setting the script inherently assumes. However, if there's a need to modify the monitor interval, it's critical to define a variable called `MON_INTERVAL` that matches the desired interval. This adjustment is crucial as the script determines the freshness of the replication timestamp relative to the BIG-IP system time, but there is no mechanism for the script to determine the monitor interval from the F5 automatically. Given that ClearPass refreshes the replication timestamp every 3 minutes, we allow for 3 minutes + the monitor interval + 5 seconds (a hard coded value to account for clock variances) to consider if a replication timestamp is new enough.
+### BIG-IP Monitor Configuration:
+#### Monitor Interval
+The default monitor configuration sets a 5-second interval, a setting the script inherently assumes. However, if there's a need to modify the monitor interval, it's critical to define a variable called `MON_INTERVAL` that matches the desired interval. This adjustment is crucial as the script determines the freshness of the replication timestamp relative to the BIG-IP system time, but there is no mechanism for the script to determine the monitor interval from the F5 automatically. Given that ClearPass only refreshes the replication timestamp every 3 minutes, we allow for 3 minutes + the monitor interval + 5 seconds (a hard coded value to account for clock variances) to consider if a replication timestamp is new enough.
 
-For example, if the monitor interval is 10 seconds, you should set `MON_INTERVAL` to 10, and a replication timestamp older than 3 minutes and 15 seconds will be considered invalid.
+For example, if the monitor interval is 10 seconds, you should set the variable `MON_INTERVAL` to 10, and a replication timestamp older than 3 minutes and 15 seconds will be considered invalid.
 
-The monitor interval must be at least 2 seconds. F5's best practice for a monitor timeout is 3x the monitor interval plus 1 second (for a 10 second interval, the timeout should be 31).
+The monitor interval must be at least 2 seconds.
 
+F5's best practice for a monitor timeout is 3x the monitor interval plus 1 second (for a 10 second interval, the timeout should be 31).
+
+#### Description
 It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
 
-### Script Variables
-- `CLIENT_SECRET`: Manditory. Client's secret key for API authentication. This will be visible in clear text in the current version of this script.
-- `CLIENT_ID`: Manditory. Client ID name for ClearPass API authentication.
-- `BUFFER_TIME`: Time buffer for token refresh. 10 minutes (600 seconds) by default if not specified. Must be less than token lifetime configured on the API client and greater than the monitor interval. Recommended minimum of 25 seconds to overcome replication delay.
-- `MON_INTERVAL`: Interval for monitoring in seconds. Must match the internal configured on the monitor itself. 5 seconds by default if not specified. Must be less than the token lifetime and greater than 1.
-
-### Token Lifetime
-Even though new tokens are being obtained from the subscriber, the token itself is still generated on the publisher and is therefore subject to replication delay. The subscriber does not store the token that is obtained during the API call to get a new token. Therefore, it is recommended that the lifetime of the token must be at least 30 seconds in order to overcome replication delay. In addition, the token lifetime and exceed both the monitor interval and configured `BUFFER_TIME` (10 minutes/600 seconds by default).
-
-The default token lifetime of 8 hours is likely acceptable for most environments that don't have security requirements that dictate shorter token lifetimes.
+#### Monitor Variables
+- `CLIENT_SECRET`: Mandatory. Client's secret key for API authentication. This will be visible in clear text in the current version of this script.
+- `CLIENT_ID`: Mandatory. Client ID name for ClearPass API authentication.
+- `BUFFER_TIME`: Time buffer for token renewal. If a token is set to expire in less time than this variable, a new token will be retrieved and stored for future use. 10 minutes (600 seconds) by default if not specified. **Must** be less than token lifetime configured on the API client and greater than the monitor interval. Recommended minimum of 25 seconds to overcome replication delay.
+- `MON_INTERVAL`: Interval for monitoring in seconds. **Must** match the internal configured on the monitor itself. 5 seconds by default if not specified. Must be less than the token lifetime and greater than 1.
 
 ## Behavior and Error Detection
 
