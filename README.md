@@ -43,7 +43,7 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
         - Assign a descriptive name to the file in the `Name` field (for example, you can set it to the filename for simplicity).
         - Click `Import`.
 
-**3. Set Up the Monitor Object:**
+3. **Set Up the Monitor Object:**
     * On the BIG-IP, go to `Local Traffic > Monitors`.
     * Click `Create`.
         - Name your monitor, e.g., `ClearPass Sync`.
@@ -54,7 +54,7 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
         - If using a wildcard (0) port for pool members, switch `Configuration` from `Basic` to `Advanced`, then set the `Alias Service Port` to `443`.
         - Click `Finished`.
 
-**4. Assign to Pool:**
+4. **Assign to Pool:**
     * On the BIG-IP, navigate to `Local Traffic > Virtual Servers > Pools`.
     * Find and select your ClearPass pool.
     * Within the `Health Monitors` section, transfer your newly created monitor created in the previous step (`ClearPass Sync` was the example) from the `Available` column to the `Active` column.
@@ -62,7 +62,7 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
 
 ## Advanced Configurations
 ### Operator Profile:
-For optimal functioning of the ClearPass API client, the assigned operator profile should have the below permissions:
+The operator profile assigned to the API Client must have the below permissions:
 - **API Services**: Set to `Custom`
     * `Allow API Access`: Choose `Allow Access`.
 - **Platform**: Set to `Custom`
@@ -72,16 +72,18 @@ No other permissions are required for the API Client operator profile.
 
 ### Monitor Configuration:
 
-The default monitor configuration operates on a 5-second interval, a setting the script inherently assumes. However, if there's a need to modify the monitor interval, it's critical to define a variable called `MON_INTERVAL` that matches the desired interval. This adjustment is crucial as the script determines the freshness of the replication timestamp relative to the BIG-IP system time, but there is no mechanism for the script to determine the monitor interval automatically. Given that ClearPass refreshes the replication timestamp every 3 minutes, we allow for 3 minutes + the monitor interval + 5 seconds (a hard coded value to account for clock variances) to consider if a replication timestamp is new enough.
+The default monitor configuration operates on a 5-second interval, a setting the script inherently assumes. However, if there's a need to modify the monitor interval, it's critical to define a variable called `MON_INTERVAL` that matches the desired interval. This adjustment is crucial as the script determines the freshness of the replication timestamp relative to the BIG-IP system time, but there is no mechanism for the script to determine the monitor interval from the F5 automatically. Given that ClearPass refreshes the replication timestamp every 3 minutes, we allow for 3 minutes + the monitor interval + 5 seconds (a hard coded value to account for clock variances) to consider if a replication timestamp is new enough.
 
 For example, if the monitor interval is 10 seconds, you should set `MON_INTERVAL` to 10, and a replication timestamp older than 3 minutes and 15 seconds will be considered invalid.
+
+The monitor interval must be at least 2 seconds. F5's best practice for a monitor timeout is 3x the monitor interval plus 1 second (for a 10 second interval, the timeout should be 31).
 
 ### Script Variables
 
 - `CLIENT_SECRET`: Manditory. Client's secret key for API authentication. This will be visible in clear text in the current version of this script
 - `CLIENT_ID`: Manditory. Client ID name for ClearPass API authentication.
 - `BUFFER_TIME`: Time buffer for token refresh. 10 minutes by default if not specified. Must be less than token lifetime configured on the API client and greater than the monitor interval. Recommended minimum of 1 minute.
-- `MON_INTERVAL`: Interval for monitoring in seconds. Must match the internal configured on the monitor itself. 5 seconds by default if not specified.
+- `MON_INTERVAL`: Interval for monitoring in seconds. Must match the internal configured on the monitor itself. 5 seconds by default if not specified. Must be less than the token lifetime and greater than 1.
 
 ### Token Lifetime
 
