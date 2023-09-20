@@ -6,6 +6,8 @@ The `f5-cp-sync-check.py` script serves as an F5 external monitor, designed to v
 
 This README serves as a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script. The script executes an API call to the targeted server, inspecting the last replication timestamp to ascertain synchronization with the broader network. Its rigorous error-handling mechanisms ensure that a server is only recognized as `Up` when synchronization is verified. Additionally, the script seamlessly manages OAuth tokens, and provides detailed logging.
 
+It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
+
 ## Intended Usage
 
 This script and the monitor object it gets associated with are intended for use to monitor ClearPass nodes in a GTM/LTM resource pool where cluster synchronization is critical for their authentication purposes. Commonly, this would include any server which provides authentication service for Guest or Onboard users and devices, or any service that relies on an up-to-date Endpoint database. These are just examples, and there may be other use cases where synchronization is critical.
@@ -47,6 +49,7 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
     * On the BIG-IP, go to `Local Traffic > Monitors`.
     * Click `Create`.
         - Name your monitor, e.g., `ClearPass Sync`.
+        - In the `Description` field, put a link to this repository as it is the only source of documentation for the monitor.
         - Set `Type` as `External`.
         - For `External Program`, select your script file (`f5-cp-sync-check.py` if you named it the same as the filename in the previous step).
         - Within `Variables`, type `CLIENT_ID` (remember it's case sensitive) for the Name. Use the API Client name you earlier set in ClearPass as the Value (e.g., `F5_CP_SYNC_HEALTHCHECK`), then press `Add`.
@@ -71,22 +74,21 @@ The operator profile assigned to the API Client must have the below permissions:
 No other permissions are required for the API Client operator profile.
 
 ### Monitor Configuration:
-
 The default monitor configuration operates on a 5-second interval, a setting the script inherently assumes. However, if there's a need to modify the monitor interval, it's critical to define a variable called `MON_INTERVAL` that matches the desired interval. This adjustment is crucial as the script determines the freshness of the replication timestamp relative to the BIG-IP system time, but there is no mechanism for the script to determine the monitor interval from the F5 automatically. Given that ClearPass refreshes the replication timestamp every 3 minutes, we allow for 3 minutes + the monitor interval + 5 seconds (a hard coded value to account for clock variances) to consider if a replication timestamp is new enough.
 
 For example, if the monitor interval is 10 seconds, you should set `MON_INTERVAL` to 10, and a replication timestamp older than 3 minutes and 15 seconds will be considered invalid.
 
 The monitor interval must be at least 2 seconds. F5's best practice for a monitor timeout is 3x the monitor interval plus 1 second (for a 10 second interval, the timeout should be 31).
 
-### Script Variables
+It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
 
+### Script Variables
 - `CLIENT_SECRET`: Manditory. Client's secret key for API authentication. This will be visible in clear text in the current version of this script.
 - `CLIENT_ID`: Manditory. Client ID name for ClearPass API authentication.
 - `BUFFER_TIME`: Time buffer for token refresh. 10 minutes (600 seconds) by default if not specified. Must be less than token lifetime configured on the API client and greater than the monitor interval. Recommended minimum of 25 seconds to overcome replication delay.
 - `MON_INTERVAL`: Interval for monitoring in seconds. Must match the internal configured on the monitor itself. 5 seconds by default if not specified. Must be less than the token lifetime and greater than 1.
 
 ### Token Lifetime
-
 Even though new tokens are being obtained from the subscriber, the token itself is still generated on the publisher and is therefore subject to replication delay. The subscriber does not store the token that is obtained during the API call to get a new token. Therefore, it is recommended that the lifetime of the token must be at least 30 seconds in order to overcome replication delay. In addition, the token lifetime and exceed both the monitor interval and configured `BUFFER_TIME` (10 minutes/600 seconds by default).
 
 The default token lifetime of 8 hours is likely acceptable for most environments that don't have security requirements that dictate shorter token lifetimes.
@@ -102,7 +104,7 @@ The script then makes a call to the ClearPass server to retrieve the last replic
 The publisher will always be marked as `Up` if the API call was successful.
 
 ## Limitations
-- The script does support encrypted client secrets currently. The client secret will be visible in plain text to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth. Password encryption will be available in a future version.
+- The script does support encrypted client secrets currently. The client secret will be visible in plain text to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth. Secret encryption will be available in a future version.
 - Monitor interval must be passed manually to the script using the `MON_INTERVAL` variable as there is no way to obtain this information automatically and the script is dependant on this value.
 - If there's a change in token lifetime (for example, changing settings on the API Client configuration will invalidate existing tokens), the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`. Alternatively, you could wait for the token to expire, but this could take a long time depending on how much time was left on the original token.
 - The script will not attempt to obtain a new token if it receives any HTTP 4xx errors as replication delay can cause newly generated valid tokens to not yet be available on the subscriber.
