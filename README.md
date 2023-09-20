@@ -92,25 +92,28 @@ The operator profile assigned to the API Client must have the below permissions:
 No other permissions are required for the API Client operator profile.
 
 ### BIG-IP Monitor Configuration:
-#### Monitor Interval
-The default monitor configuration sets a 5-second interval, a setting the script inherently assumes. However, if there's a need to modify the monitor interval, it's critical to define a variable called `MON_INTERVAL` that matches the desired interval. This adjustment is crucial as the script determines the freshness of the replication timestamp relative to the BIG-IP system time, but there is no mechanism for the script to determine the monitor interval from the F5 automatically. Given that ClearPass only refreshes the replication timestamp every 3 minutes, we allow for 3 minutes + the monitor interval + 5 seconds (a hard coded value to account for clock variances) to consider if the maximum replication timestamp in the cluster is new enough.
+#### Monitor `Interval` and `Timeout`
+The default monitor configuration sets a 5-second `Interval`, a setting the script inherently assumes. However, if there's a need to modify the monitor `Interval`, it's critical to define a variable called `MON_INTERVAL` that matches the desired `Interval`. This adjustment is crucial as the script determines the freshness of the replication timestamp relative to the BIG-IP system time, but there is no mechanism for the script to determine the monitor `Interval` from the F5 automatically. Given that ClearPass only refreshes the replication timestamp every 3 minutes, we allow for 3 minutes + the monitor `Interval` + 5 seconds (a hard coded value to account for clock variances) to consider if the maximum replication timestamp in the cluster is new enough.
 
-For example, if the monitor interval is 10 seconds, you should set the variable `MON_INTERVAL` to 10, and a replication timestamp older than 3 minutes and 15 seconds will be considered invalid.
+For example, if the monitor `Interval` is 10 seconds, you should set the variable `MON_INTERVAL` to 10, and a replication timestamp older than 3 minutes and 15 seconds will be considered invalid.
 
 The monitor interval must be at least 2 seconds, but it not recommended to reduce this lower than 5 seconds. It **must** also be _less_ than `BUFFER_TIME`.
 
-F5's best practice for a monitor timeout is 3x the monitor interval plus 1 second (for a 10 second interval, the timeout should be 31).
+F5's best practice for a monitor `Timeout` is 3x the monitor `Interval` plus 1 second (for a 10 second `Interval`, the `Timeout` should be 31).
 
-Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 or 185 seconds between the subscriber and the rest of the cluster. This will cause the monitor to fail. However, at the next interval, the monitor will succeed. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
+Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 to 185 seconds between the subscriber and the rest of the cluster. This will cause the monitor to fail that cycle. However, at the next `Interval`, the monitor will succeed because the replication timestamps will be updated. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
 
-#### Description
+#### Monitor `Description`
 It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
 
-#### Monitor Variables
+#### Monitor `Variables`
 - `CLIENT_SECRET`: Mandatory. Client's secret key for API authentication. This will be visible in clear text in the current version of this script.
 - `CLIENT_ID`: Mandatory. Client ID name for ClearPass API authentication.
 - `BUFFER_TIME`: Time buffer for token renewal. If a token is set to expire in less time than this variable, a new token will be retrieved and stored for future use. 10 minutes (600 seconds) by default if not specified. **Must** be _less_ than token lifetime configured on the API client and greater than the monitor interval. Recommended minimum of 25 seconds to overcome replication delay.
 - `MON_INTERVAL`: Interval for monitoring in seconds. **Must** match the internal configured on the monitor itself; see `Monitor Interval` section. 5 seconds by default if not specified. **Must** be _less_ than the token lifetime and greater than 1. Not recommended to be less than 5.
+
+#### Monitor `Alias Service Port`
+If your pool uses a wildcard (0) port for its members, you must assign the `Alias Service Port` as `443`. To set this value, you will need to switch the `Configuration` view from `Basic` to `Advanced`. You might see a warning when trying to change the monitor which reads `Cannot modify the address type of monitor /Common/<monitor name>` or a warning trying to assign the monitor to the pool which says `The monitor /Common/<monitor name> has a wildcard destination service and cannot be associated with a node that has a zero service.`.
 
 ## Behavior and Error Detection
 
