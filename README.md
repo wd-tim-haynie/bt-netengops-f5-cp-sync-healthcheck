@@ -112,7 +112,7 @@ It is advisable to put a link to this repository in the description field of you
 
 The script only uses "client credentials" authentication, so a reauth token is not used. The token file and its expiration epoch are stored in `/var/tmp/<name-of-monitor>-token.json`.
 
-When the script loads, the script will look in its token file for an existing unexpired token. If a valid token is unavailable, a new token will be retrieved using OAuth. A new token will also be obtained if the expiration of the existing token is within `BUFFER_TIME`, but the oldest token will always be used until 5 seconds before expiration. Under normal behavior, there should never be more than 2 tokens at a time in the token file, but if the token lifetime is less than `BUFFER_TIME`, the token file will fill with multiple tokens. This isn't harmful as it is unlikely to fill the disk, and the script will still find the oldest valid token, and automatically delete old tokens, but it is worth noting for troubleshooting purposes.
+When the script loads, the script will look in its token file for an existing unexpired token. If a valid token is unavailable, a new token will be retrieved using OAuth. A new token will also be obtained if the expiration of the existing token is within `BUFFER_TIME`, but the oldest token will always be used until 5 seconds before expiration. 
 
 The script then makes a call to the ClearPass server to retrieve the last replication timestamp for each node in the cluster. If the last replication timestamp of the ClearPass server in question is less than 10 seconds older than the highest replication timestamp in the cluster, AND the highest replication timestamp is newer than 3 minutes, 5 seconds + MON_INTERVAL based on the system clock of the F5, the monitor will mark the node as `Up`.
 
@@ -142,6 +142,8 @@ The script will mark a node `Down` for any of the following reasons:
 - Unhandled reasons: Script fails to detect a known failure scenario
 
 Since the monitor will run every few seconds or minutes anyway, the script does not attempt to recover from any errors, including HTTP 4xx errors, and will mark the node `Down`. This is because a 4xx error is returned if a brand new token is generated and used immediately, prior to cluster replication.
+
+Under normal behavior, there should never be more than 2 tokens at a time in the token file, but if the token lifetime is less than `BUFFER_TIME`, the token file will fill with multiple tokens. This scenario isn't harmful as it has virtually zero chance to fill the disk, and because the script will still automatically find the oldest valid token delete expired tokens, but it is worth noting for troubleshooting purposes.
 
 ## About
 The monitor has been tested on the following versions:
