@@ -55,6 +55,7 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
         - In the `Description` field, put a link to this repository as it is the only source of documentation for the monitor.
         - Set `Type` as `External`.
         - For `External Program`, select your script file (`f5-cp-sync-check.py` if you named it the same as the filename in the previous step).
+        - For `Timeout`, set 181. 181 is a best practice for this script for reasons described below.
         - Within `Variables`, type `CLIENT_ID` (remember it's case sensitive) for the Name. Use the API Client name you earlier set in ClearPass as the Value (e.g., `F5_CP_SYNC_HEALTHCHECK`), then press `Add`.
         - For the next variable, type `CLIENT_SECRET` in the Name field. Paste the secret you saved from ClearPass in the `Value` section, then click `Add`.
         - If using a wildcard (0) port for pool members, switch `Configuration` from `Basic` to `Advanced`, then set the `Alias Service Port` to `443`.
@@ -99,9 +100,9 @@ For example, if the monitor `Interval` is 10 seconds, you should set the variabl
 
 The monitor `Interval` must be at least 2 seconds, but it not recommended to reduce this lower than 5 seconds. It **must** also be _less_ than `BUFFER_TIME`.
 
-F5's best practice for a monitor `Timeout` is 3x the monitor `Interval` plus 1 second (for a 10 second `Interval`, the `Timeout` should be 31).
+ClearPass only updates the replication interval timestamp every 3 minutes (180 seconds). Therefore, the best practice for this monitor is 181 second `Timeout`. This is because we want to avoid the situation where multiple nodes are marked as `Down` for several minutes simply because of a single reading where nodes were 15 seconds behind (this does happen from time to time).
 
-Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 to 185 seconds between the subscriber and the rest of the cluster. This race condition will cause the monitor to fail that `Interval`. However, at the next `Interval`, the monitor will succeed because the replication timestamps will be updated. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
+Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 to 185 seconds between the subscriber and the rest of the cluster. This race condition will cause the monitor to fail that `Interval`. However, at the next `Interval`, the monitor will succeed because the replication timestamps will be updated. This is another reason why it is important to adhere to the best practice of this script by setting the monitor `Timeout` to 181.
 
 #### Monitor `Description`
 It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
@@ -131,9 +132,9 @@ The publisher will always be marked as `Up` if the API call was successful.
 - The script will not attempt to obtain a new token if it receives any HTTP 4xx errors as replication delay can cause newly generated valid tokens to not yet be available on the subscriber.
 - If there's a change in token lifetime (for example, changing settings on the API Client configuration will invalidate existing tokens), the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`. Alternatively, you could wait for the token to reach its scheduled expiration time, but this could take a long time depending on how much time was left on the original token. An invalidated token will cause the script to throw an HTTP 4xx error (note the previous limitation).
 - The BIG-IP only has python 2.7 available, and it is not easy to import external modules.
-- ClearPass only updates the Last Replication Timestamp once every 3 minutes. This implies that the maximum amount of time it potentially takes for a server to be marked `Down` is 3 minutes + the monitor `Timeout`. This is unlikely, however, because the script marks a resource `Down` if it gets no HTTP response during the API calls, but it is worth noting. Therefore, make sure this isn't the only monitor in your resource pool.
+- ClearPass only updates the Last Replication Timestamp once every 3 minutes. This implies that the maximum amount of time it potentially takes for a server to be marked `Down` is 3 minutes. Therefore, make sure this isn't the only monitor in your resource pool.
 - Updating the ClearPass infrastructure will cause databases to be out of sync for a while. It may make sense to disable the monitor in each ClearPass zone during a maintenance window so that the entire infrastructure doesn't get flagged as `Down` simultaneously.
-- Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 or 185 seconds between the subscriber and the rest of the cluster. This race condition will cause the monitor to fail for that `Interval`. However, at the next `Interval`, the monitor will succeed. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
+- Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 or 185 seconds between the subscriber and the rest of the cluster. This race condition will cause the monitor to fail for that `Interval`. However, at the next `Interval`, the monitor will succeed. Therefore, it is important to adhere to the best practice of this script by setting the monitor `Timeout` to 181. See the `Monitor Interval and Timeout` section of this README for more information.
 
 ## Troubleshooting
 Check the `/var/log/ltm` logs for detailed information on script errors or issues. This is the most useful resource for checking why a node is failing its healthcheck. Use `tail -f /var/log/ltm` from the bash shell to watch logs in real time. Note that the `/var/log/ltm` log is used even if the BIG-IP is not provisioned for LTM.
@@ -147,6 +148,7 @@ The script will mark a node `Down` for any of the following reasons:
     * Either CLIENT_ID or CLIENT_SECRET are missing or invalid
 - `URL Error`: Usually happens if the node hasn't started all of its services, or is hard down
 - `Timeout`: Caused by lack of response for an HTTP request for a token or replication timestamp, and no ICMP message received to flag a `URL Error`
+- `SSL Error`: Seen occassionally, still debugging
 - Unhandled reasons: Script fails to detect a known failure scenario
 
 Since the monitor will run every few seconds or minutes anyway, the script does not attempt to recover from any errors, including HTTP 4xx errors, and will mark the node `Down`. This is because a 4xx error is returned if a brand new token is generated and used immediately, prior to cluster replication.
