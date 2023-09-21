@@ -136,7 +136,7 @@ The publisher will always be marked as `Up` if the API call was successful.
 - Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 or 185 seconds between the subscriber and the rest of the cluster. This race condition will cause the monitor to fail for that `Interval`. However, at the next `Interval`, the monitor will succeed. Therefore, the best practice use of this script is to set the `Timeout` on the monitor to the F5 best practice of 3x the monitor `Interval` + 1 seconds, with the monitor `Interval` no less than 5 seconds.
 
 ## Troubleshooting
-Check the `/var/log/ltm` logs for detailed information on script errors or issues. This is the most useful resource for checking why a node is failing its healthcheck. Use `tail -f /var/log/ltm` from the bash shell to watch logs in real time.
+Check the `/var/log/ltm` logs for detailed information on script errors or issues. This is the most useful resource for checking why a node is failing its healthcheck. Use `tail -f /var/log/ltm` from the bash shell to watch logs in real time. Note that the `/var/log/ltm` log is used even if the BIG-IP is not provisioned for LTM.
 
 The script will mark a node `Down` for any of the following reasons:
 - `HTTP error`: Seen for several reason:
@@ -153,7 +153,11 @@ Since the monitor will run every few seconds or minutes anyway, the script does 
 
 Under normal behavior, there should never be more than 2 tokens at a time in the token file, but if the token lifetime is less than `BUFFER_TIME`, the token file will fill with multiple tokens. This scenario isn't harmful as it has virtually zero chance to fill the disk, and because the script will still automatically find the oldest valid token delete expired tokens, but it is worth noting for troubleshooting purposes.
 
+## Known Issues
+* In our test environment, the 1.0 version of the script did not work as expected on a GTM-only BIG-IP.
+
 ## About
+
 The monitor has been tested on the following versions:
 - BIG-IP 14.1.5.4
 - ClearPass 6.9.13
