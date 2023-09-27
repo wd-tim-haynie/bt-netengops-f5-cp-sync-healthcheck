@@ -74,7 +74,7 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
 ### BIG-IP Monitor Configuration:
 #### Monitor `Variables`
 - `CLIENT_ID`: Mandatory. Client ID name for ClearPass API authentication.
-- `CLIENT_SECRET`: Client's secret key for API authentication. This will be visible in clear text in the current version of this script. It is recommended to use an encrypted secret instead. Mandatory if `ENCRYPTED_SECRET` is not used. 
+- `CLIENT_SECRET`: Client's secret key for API authentication. This will be visible in clear text. It is recommended to use an encrypted secret instead. Mandatory if `ENCRYPTED_SECRET` is not used. 
 - `ENCRYPTED_SECRET`: An aes-256-cbc encrypted version of the client secret. Mandatory if plaintext `CLIENT_SECRET` is not used. Requires `DECRYPTION_KEYFILE` to be set.
 - `DECRYPTION_KEYFILE`: An iFile containing the decryption key which is used to decrypt the `ENCRYPTED_SECRET`. Manditory if plaintext `CLIENT_SECRET` is not used.
 - `MAX_SKEW`: Optional, default 15.0 seconds. The maximum amount of time to consider the node to be in sync. The script will sleep this long before attempting to use its new token. Refer to the note in the `Additional Conderations` section for picking an appropriate `MAX_SKEW`.
