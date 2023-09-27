@@ -2,61 +2,57 @@
 
 """
 f5-cp-sync-check.py
-Version 1.0 Sept. 19, 2023
+Version 2.0 Sept. 27, 2023
 https://github.com/wd-tim-haynie/bt-netengops-f5-cp-sync-healthcheck
 Author: Tim Haynie, CWNE #254, ACMX #508 https://www.linkedin.com/in/timhaynie/
 """
 
-from re import match
-from json import loads, load, dump, dumps
-from datetime import datetime, timedelta
-from ssl import _create_unverified_context
-from logging import getLogger, Formatter, FileHandler, INFO
-from os import getenv, path
+
+from json import loads, dumps
+from ssl import _create_unverified_context, SSLError
+from logging import getLogger, Formatter, FileHandler, INFO, DEBUG, WARNING, ERROR, CRITICAL
+from os import getenv
 from sys import exit
 from socket import timeout
-from time import time
-#from glob import glob
+from time import time, sleep
+from glob import glob
+from subprocess import check_output, CalledProcessError
 
-# compatibility with python2 and python3
-try:
+try:  # Python 2
     from urllib2 import Request, urlopen, HTTPError, URLError
-    # This will encode data to bytes in Python 2. However, in Python 2, the str type is already bytes.
-    encode_to_bytes = lambda s: s
-except ModuleNotFoundError:
+    encode_to_bytes = lambda s: s  # returns the same value in Python 2
+except ModuleNotFoundError:  # Python 3
     from urllib.request import Request, urlopen
     from urllib.error import HTTPError, URLError
-    # In Python 3, you need to explicitly encode the str to bytes.
-    encode_to_bytes = lambda s: s.encode('utf-8')
+    encode_to_bytes = lambda s: s.encode('utf-8') # encode str to bytes in Python 3
 
+
+# set global constants
+INSECURE = _create_unverified_context()  # For insecure SSL requests
+HEADERS = {"Content-Type": "application/json", "Accept": "application/json", "Connection": "close"}
+LOG_LEVEL_DICT = {"DEBUG": DEBUG, "INFO": INFO, "WARNING": WARNING, "ERROR": ERROR, "CRITICAL": CRITICAL}
 
 # retrieve environment variables
-NODE_IP = getenv('NODE_IP')
+NODE_IP = getenv('NODE_IP')[7:] if '.' in getenv('NODE_IP') else getenv("NODE_IP") # converts to IPv4 if necessary
 MON_TMPL_NAME = getenv("MON_TMPL_NAME")
+NODE_NAME = getenv("NODE_NAME")
+LOG_LEVEL = getenv("LOG_LEVEL", "CRITICAL").upper()
+RUN_I = getenv("RUN_I")
 CLIENT_SECRET = getenv("CLIENT_SECRET")
 CLIENT_ID = getenv("CLIENT_ID")
-BUFFER_TIME = getenv("BUFFER_TIME") # 10 minutes (600 seconds) by default for token refresh
-MON_INTERVAL = getenv("MON_INTERVAL") # 5 seconds by default for monitor interval
+MAX_SKEW = getenv("MAX_SKEW", 15.0)
+DECRYPTION_KEYFILE = getenv("DECRYPTION_KEYFILE")
+ENCRYPTED_SECRET = getenv("ENCRYPTED_SECRET")
+TIMEOUT = getenv("TIMEOUT", 2.4)
 
 
-# define additional global constants
-MON_NAME = MON_TMPL_NAME.split('/')[-1] # removes the path from the monitor name
-INSECURE = _create_unverified_context()  # For insecure SSL requests
-BEARER_TOKEN_FILE = "/var/tmp/{}-token.json".format(MON_NAME)
-
-
-# convert ipv6 to ipv4 if necessary
-if '.' in NODE_IP:
-    NODE_IP = NODE_IP[7:]
-
-
-# setup logging
 def setup_logger():
+    log_level = LOG_LEVEL_DICT.get(LOG_LEVEL, CRITICAL)  # default to CRITICAL logging if bad user input
     logger = getLogger('{}'.format(MON_TMPL_NAME))
-    logger.setLevel(INFO)
+    logger.setLevel(log_level)
 
     handler = FileHandler('/var/log/ltm')
-    handler.setLevel(INFO)
+    handler.setLevel(log_level)
 
     formatter = Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%b %d %H:%M:%S')
     handler.setFormatter(formatter)
@@ -67,147 +63,45 @@ def setup_logger():
 
 
 LOGGER = setup_logger()
-LOGGER.debug("{} monitor script start".format(NODE_IP))
-
-
-if BUFFER_TIME is None:
-    BUFFER_TIME = 600 # 10 minutes (600 seconds) by default if not specified
-    LOGGER.debug("BUFFER_TIME set to 600 seconds")
-else:
-    try:
-        BUFFER_TIME = int(BUFFER_TIME)
-        LOGGER.debug("BUFFER_TIME set to {} seconds".format(BUFFER_TIME))
-
-    except ValueError:
-        BUFFER_TIME = 600
-        LOGGER.warning("Invalid BUFFER_TIME provided, defaulting to 600 seconds")
-
-
-if MON_INTERVAL is None:
-    MON_INTERVAL = 5 # 5 seconds for monitor interval, F5 default
-    LOGGER.debug("MON_INTERVAL set to 5 seconds")
-else:
-    try:
-        MON_INTERVAL = int(MON_INTERVAL)
-        LOGGER.debug("MON_INTERVAL set to {} seconds".format(MON_INTERVAL))
-    except ValueError:
-        MON_INTERVAL = 5
-        LOGGER.warning("Invalid MON_INTERVAL, defaulting to 5 seconds")
+LOGGER.debug("{} {}: {} monitor script initialized, debug logging enabled".format(NODE_NAME, NODE_IP, RUN_I))
 
 
 def main():
-    token = get_token()
+    token_req_start_time = time()
+    HEADERS['Authorization'] = "Bearer " + request_to_get_token()
 
-    req = Request("https://{}/api/cluster/server".format(NODE_IP))
-    req.add_header("Authorization", "Bearer " + token)
-    req.add_header("Accept", "application/json")
-    req.add_header("Connection", "close")
+    # subtract the amount of time it took to get the token from the MAX_SKEW and sleep for that long
+    sleep_time = float(MAX_SKEW) - (time() - token_req_start_time)
+
+    LOGGER.debug("{} {}: Token obtained. Sleeping for {} seconds".format(NODE_NAME, NODE_IP, sleep_time))
+    sleep(sleep_time)
 
     try:
-        response = urlopen(req, context=INSECURE, timeout=MON_INTERVAL - 1)
-
+        req = Request("https://{}/api/oauth/me".format(NODE_IP), headers=HEADERS)
+        response = urlopen(req, context=INSECURE, timeout=TIMEOUT)
         content = response.read()
         response.close()
-        servers = loads(content)["_embedded"]["items"]
 
-        # iterate through the list of servers. find the highest replication timestamp and the server's replication timestamp
-        max_epoch = 0
-        test_epoch = 0
-        for server in servers:
-            if server['last_replication_timestamp'] is not None:
-                this_epoch = datestring_to_epoch(server['last_replication_timestamp'])
-
-                if this_epoch > max_epoch:
-                    max_epoch = this_epoch
-
-            if server['server_ip'] == NODE_IP or server['management_ip'] == NODE_IP:
-                if server['is_master']:
-                    print("{} UP as publisher".format(NODE_IP))
-                    exit() # no need to go any further for the publisher
-                else:
-                    test_epoch = this_epoch
-
-        """
-        ClearPass updates last_replication_timestamp value every 180 seconds (3 minutes).
-        We will fail the check if the time variance is more than 185 + MON_INTERVAL seconds since the monitor runs every
-        MON_INTERVAL seconds and we need to allow a few seconds of clock variance.
-        NTP is required on both ClearPass and F5.
-        """
-        if max_epoch < int(time()) - MON_INTERVAL - 185:
-            LOGGER.info("{} last replication timestamp too old. Marking down. F5 epoch: {}, CPPM epoch: {}, delta: "
-                        "{}".format(NODE_IP, int(time()), max_epoch, int(time()) - max_epoch))
-        else: # time is in range
-            if test_epoch < max_epoch - 10:  # test failed, node timestamp more than 10 seconds behind
-                LOGGER.info("{} failed sync check. Marking down. max_epoch: {}, test_epoch: {}, delta: {}"
-                            .format(NODE_IP, max_epoch, test_epoch, max_epoch - test_epoch))
-            else:  # test succeeded
-                print("{} UP".format(NODE_IP))
+        if CLIENT_ID in loads(content)["name"]:
+            LOGGER.debug("{} {}: Up".format(NODE_NAME, NODE_IP))
+            print("{} {} Up".format(NODE_NAME, NODE_IP))
 
     except HTTPError as e:
-        LOGGER.error("{}:  HTTP Error: {} retrieving server timestamp".format(NODE_IP, e.code))
-
+        LOGGER.error("{} {}: HTTP Error using token: {}".format(NODE_NAME, NODE_IP, e.code))
     except URLError as e:
-        LOGGER.error("{}:  URL Error: {} retrieving server timestamp".format(NODE_IP, e.reason))
-
+        LOGGER.error("{} {}: URL Error: {}".format(NODE_NAME, NODE_IP, e.reason))
     except timeout:
-        LOGGER.error("{}:  Request timed out fetching server timestamp".format(NODE_IP))
-
-    except KeyError:
-        LOGGER.error("{}: Unexpected response structure from ClearPass fetching server timestamp".format(NODE_IP))
-
+        LOGGER.error("{} {}: Request timed out".format(NODE_NAME, NODE_IP))
+    except SSLError as e:
+        LOGGER.error("{} {}: SSL Error occurred. Args: {}. Errno: {}. Strerror: {}. Full exception: {}".format(
+            NODE_NAME, NODE_IP, e.args, getattr(e, 'errno', 'N/A'), getattr(e, 'strerror', 'N/A'), str(e)))
     except Exception as e:
-        LOGGER.error("Unhandled Error fetching server timestamp: {}".format(str(e)))
-
-
-def datestring_to_epoch(date_string):
-    # YYYY-MM-DD HH:MM:SS[-/+]timezone offset from UTC
-    # groups:   (  YY - MM  - DD  ) ( HH  : MM  : SS  )( tzoffset)
-    m = match(r'(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})([-+]\d{2})', date_string)
-
-    if not m:
-        LOGGER.info('{}: Invalid date format.'.format(NODE_IP))
-        raise ValueError("Invalid date format")
-        exit()
-
-    date_part, time_part, tz_offset = m.groups()
-    naive_dt = datetime.strptime('{} {}'.format(date_part, time_part), '%Y-%m-%d %H:%M:%S')
-
-    hours_offset = int(tz_offset)
-    adjusted_dt = naive_dt - timedelta(hours=hours_offset)
-    epoch = (adjusted_dt - datetime(1970, 1, 1)).total_seconds()
-    return int(epoch)
-
-
-def get_secret():
-    """
-    Future version will handle encrypted secrets
-    """
-    return CLIENT_SECRET
-  
-
-# def get_decryption_key_file_path(base_name):
-#     # The directory path and the known prefix
-#     directory_path = "/config/filestore/files_d/Common_d/ifile_d/"
-#     prefix = ":Common:"
-#     search_pattern = "{}{}{}_*".format(directory_path, prefix, base_name)
-#
-#     # List all matching files
-#     matching_files = glob(search_pattern)
-#
-#     # Sort the matching files to get the latest (if necessary)
-#     matching_files.sort()
-#
-#     # Return the first match or None if no matches found
-#     return matching_files[0] if matching_files else None
+        LOGGER.error("{} {}: Unhandled Error using token: {}. Exception type: {}"
+                     .format(NODE_NAME, NODE_IP, str(e), type(e).__name__))
 
 
 def request_to_get_token():
     url = "https://{}/api/oauth".format(NODE_IP)
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Connection": "close"
-    }
 
     # Prepare the request data/body
     data = {
@@ -216,111 +110,67 @@ def request_to_get_token():
         "client_secret": get_secret()
     }
 
-    # Convert the Python dictionary to a JSON string
-    data_json = dumps(data)
-    data_bytes = encode_to_bytes(data_json)
-
-    # Make the request
-    request = Request(url, data=data_bytes, headers=headers)
+    request = Request(url, data=encode_to_bytes(dumps(data)), headers=HEADERS)
 
     try:
-        response = urlopen(request, context=INSECURE, timeout=MON_INTERVAL - 1)
+        response = urlopen(request, context=INSECURE, timeout=TIMEOUT)
         response_data = response.read()
-        response.close()
-        token_data = loads(response_data)
-        return token_data
+        return loads(response_data)['access_token']
     except HTTPError as e:
-        LOGGER.error("{}: HTTP Error retrieving token: {} {}".format(NODE_IP, e.code, e.reason))
-        exit()
+        LOGGER.error("{} {}: HTTP Error getting token: {} {}".format(NODE_NAME, NODE_IP, e.code, e.reason))
     except URLError as e:
-        LOGGER.error("{}: URL Error retrieving token: {}".format(NODE_IP, e.reason))
-        exit()
+        LOGGER.error("{} {}: URL Error getting token: {}".format(NODE_NAME, NODE_IP, e.reason))
     except timeout:
-        LOGGER.error("{}:  Request timed out getting new token".format(NODE_IP))
-        exit()
+        LOGGER.error("{} {}: Request timed out getting new token".format(NODE_NAME, NODE_IP))
+    except SSLError as e:
+        LOGGER.error("{} {}: SSL Error occurred getting token. Args: {}. Errno: {}. Strerror: {}. Full exception: {}"
+                     .format(NODE_NAME, NODE_IP, e.args, getattr(e, 'errno', 'N/A'), getattr(e, 'strerror', 'N/A'),
+                             str(e)))
     except Exception as e:
-        LOGGER.error("{}: Unhandled Error retrieving token: {}".format(NODE_IP, str(e)))
+        LOGGER.error("{} {}: Unhandled Error getting token: {}. Exception type: {}"
+                     .format(NODE_NAME, NODE_IP, str(e), type(e).__name__))
+    exit()  # exit if an exception occurred
+
+
+def get_secret():
+    if DECRYPTION_KEYFILE is not None and ENCRYPTED_SECRET is not None:
+        LOGGER.debug("{} {}: DECRYPTION_KEYFILE and ENCRYPTED_SECRET are present, attempting key decryption"
+                     .format(NODE_NAME, NODE_IP))
+        with open (get_decryption_key_file_path(), 'r') as key_file:
+            return decrypt_secret(key_file.read().strip())
+    else:
+        LOGGER.debug("{} {}: either DECRYPTION_KEYFILE or ENCRYPTED_SECRET is missing; will use plaintext secret"
+                     .format(NODE_NAME, NODE_IP))
+        return CLIENT_SECRET
+
+
+def get_decryption_key_file_path():
+    directory_path = "/config/filestore/files_d/Common_d/ifile_d/"
+    prefix = ":Common:"
+    search_pattern = "{}{}{}_*".format(directory_path, prefix, DECRYPTION_KEYFILE)
+    # List all matching files
+    matching_files = glob(search_pattern)
+
+    # Sort the matching files to get the latest (if necessary)
+    matching_files.sort()
+
+    file = matching_files[0] if matching_files else None
+    if file is not None:
+        LOGGER.debug("{} {}: decryption key file is {}".format(NODE_NAME, NODE_IP, file))
+        return file
+    else:
+        LOGGER.error("{} {}: could not find decryption key file".format(NODE_NAME, NODE_IP))
         exit()
 
 
-def get_stored_tokens():
-    """
-    Retrieves stored tokens from the file. Returns an empty list if the file doesn't exist.
-    """
-    if path.exists(BEARER_TOKEN_FILE):
-        with open(BEARER_TOKEN_FILE, 'r') as f:
-            tokens = load(f)
-            return tokens
-
-    return []
-
-
-def store_tokens(tokens):
-    """
-    Stores a list of tokens to the file.
-    """
-    with open(BEARER_TOKEN_FILE, 'w') as f:
-        dump(tokens, f)
-
-    LOGGER.debug("stored tokens")
-
-
-def remove_expired_tokens(tokens):
-    """
-    Removes tokens that have already expired from the given list.
-    Returns the list after removal.
-    """
-    tokens = [token_data for token_data in tokens if token_data['expiry_time'] > time()]
-    LOGGER.debug("Filtered expired tokens")
-    return tokens
-
-
-def get_oldest_token(tokens):
-    """
-    Returns the oldest unexpired token with at least 5 seconds until expiry from a list of tokens
-    If no such token exists, returns None.
-    """
-
-    LOGGER.debug("Searching for oldest valid token")
-    for token_data in tokens:
-        if token_data['expiry_time'] - time() > 5:
-            return token_data['token']
-
-    return None
-
-
-def append_new_token(tokens):
-    """
-    Appends a new token to the list of tokens and stores it.
-    """
-    response = request_to_get_token()
-    token = response['access_token']
-    expiry = response['expires_in'] + int(time())  # Convert to epoch time
-    tokens.append({'token': token, 'expiry_time': expiry})
-    if expiry - int(time()) > BUFFER_TIME:
-        LOGGER.debug("New token expires after buffer time")
-    else:
-        LOGGER.warning("New token expires before buffer time: {}".format(expiry)) # should be a warning
-
-    store_tokens(tokens)
-
-
-def get_token():
-    tokens = get_stored_tokens()
-
-    # Remove expired tokens first
-    tokens = remove_expired_tokens(tokens)
-
-    # Fetch the latest valid token
-    token = get_oldest_token(tokens)
-
-    # If there is no token or the latest token's expiration time is within the buffer time, append a new token
-    if not token or tokens[-1]['expiry_time'] - time() <= BUFFER_TIME:
-        append_new_token(tokens)
-        token = get_oldest_token(tokens)  # Fetch the token again
-
-    return token
+def decrypt_secret(decryption_key):
+    command = "echo '{}' | openssl enc -aes-256-cbc -d -a -k '{}'".format(ENCRYPTED_SECRET, decryption_key)
+    try:
+        with open('/dev/null', 'w') as devnull:
+            return check_output(command, shell=True, stderr=devnull).decode('utf-8').strip()
+    except CalledProcessError as e:
+        LOGGER.error("Error in decryption: {}".format(e.output))
+        exit()
 
 
 main()
-LOGGER.debug("{} monitor script execution complete".format(NODE_IP))
