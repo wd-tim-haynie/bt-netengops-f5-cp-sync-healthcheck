@@ -1,14 +1,14 @@
 # ClearPass Sync Healthcheck Monitor for F5 BIG-IP
 
-# NOTE: The current version is deprecated. Do not use. A new version will be available soon.
-
 ## Introduction
 
 The `f5-cp-sync-check.py` script serves as an F5 external monitor designed to verify the synchronization status of a whether a ClearPass node in an F5 resource pool is synchronized with the rest of the ClearPass cluster. This check goes above and beyond the recommended health checks proposed in the "Deploying CPPM with F5 BIG-IP Local Traffic Manager (LTM)" guide, which hasn't been updated since 2014. While ClearPass might appear to function seamlessly concerning RADIUS and HTTPS operations, synchronization issues due to server reboots or LAN/WAN outages can lead to problems authenticating guest accounts, registering devices, or other operations that are dependant on a synchronized cluster.
 
 To address this, this F5 external health monitor proactively removes ClearPass servers that have sync discrepancies from their associated resource pools. By employing this script, you gain a robust method to monitor the sync status of the ClearPass infrastructure, surpassing the monitoring capabilities of the Aruba recommended RADIUS and HTTPS monitors.
 
-This README serves as a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script. The script executes an API call to the target server and compares the last replication timestamp of the server to the rest of the cluster. Its rigorous error-handling mechanisms ensure that a server is only recognized as `Up` when synchronization is verified. Additionally, the script seamlessly manages OAuth tokens, and provides detailed logging.
+This README serves as a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script.
+
+The mechanism to determine whether the node is in sync is straightforward. First, an API call is made to generate an OAuth token based on client credentials (client ID and secret). Once the token is received by the F5, the script sleeps for a configurable amount of time which represents the maximum allowed sync skew time. After the sleep time expires, the script makes a 2nd call using to check the status of its new token. If the 2nd API call is successful, the monitor will mark the node `Up`. It is important to note that the reason this check is valid is that the token that is returned to the F5 is not stored on the subscriber node until it is replicated during its standard batch replication. The rigorous error-handling mechanisms of the script ensure that a server is only recognized as `Up` when synchronization is verified within maximum allowed skew time. Detailed logging and the ability to use an encrypted secret are configurable.
 
 It is advisable to put a link to this repository in the description field of your monitor and the description field of the API client since this README is the only source of documentation for the monitor.
 
@@ -57,19 +57,43 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
         - In the `Description` field, put a link to this repository as it is the only source of documentation for the monitor.
         - Set `Type` as `External`.
         - For `External Program`, select your script file (`f5-cp-sync-check.py` if you named it the same as the filename in the previous step).
-        - For `Timeout`, set 181. 181 is a best practice for this script for reasons described below.
+        - For `Interval`, set 20.
+        - For `Timeout`, set 120.
         - Within `Variables`, type `CLIENT_ID` (remember it's case sensitive) for the Name. Use the API Client name you earlier set in ClearPass as the Value (e.g., `F5_CP_SYNC_HEALTHCHECK`), then press `Add`.
         - For the next variable, type `CLIENT_SECRET` in the Name field. Paste the secret you saved from ClearPass in the `Value` section, then click `Add`.
         - If using a wildcard (0) port for pool members, switch `Configuration` from `Basic` to `Advanced`, then set the `Alias Service Port` to `443`.
         - Click `Finished`.
 
 4. **Assign to Pool:**
+    * **Only do this step in a maintenance window for production devices**.
     * On the BIG-IP, navigate to `Local Traffic > Virtual Servers > Pools`.
     * Find and select your ClearPass pool.
     * Within the `Health Monitors` section, transfer your newly created monitor created in the previous step (`ClearPass Sync` was the example) from the `Available` column to the `Active` column.
     * Click `Update`.
 
 ## Advanced Configurations
+### BIG-IP Monitor Configuration:
+#### Monitor `Variables`
+- `CLIENT_ID`: Mandatory. Client ID name for ClearPass API authentication.
+- `CLIENT_SECRET`: Client's secret key for API authentication. This will be visible in clear text in the current version of this script. It is recommended to use an encrypted secret instead. Mandatory if `ENCRYPTED_SECRET` is not used. 
+- `ENCRYPTED_SECRET`: An aes-256-cbc encrypted version of the client secret. Mandatory if plaintext `CLIENT_SECRET` is not used. Requires `DECRYPTION_KEYFILE` to be set.
+- `DECRYPTION_KEYFILE`: An iFile containing the decryption key which is used to decrypt the `ENCRYPTED_SECRET`. Manditory if plaintext `CLIENT_SECRET` is not used.
+- `MAX_SKEW`: Optional, default 15.0 seconds. The maximum amount of time to consider the node to be in sync. The script will sleep this long before attempting to use its new token. Refer to the note in the `Additional Conderations` section for picking an appropriate `MAX_SKEW`.
+- `TIMEOUT`: Optional, default 2.4 seconds. Maximum amount of time to wait for an HTTP response.
+- `LOG_LEVEL`: Optional, default `CRITICAL`. Used to specific logging level severity to `/var/log/ltm`. Acceptable values are `DEBUG`, `INFO`, `WARNING`, `ERROR`, and `CRITICAL`.
+
+#### Monitor `Interval`
+The monitor `Interval` should be set to `MAX_SKEW` + 2x `TIMEOUT` + a small amount extra to account for time to initialize the script and network latency. If using all default configuration, set the interval to `20` (`MAX_SKEW` of 15.0s + 2x `TIMEOUT` 2.4s + 200ms to account for script init and latency).
+
+#### Monitor `Timeout`
+A good starting point for this monitor is `120` seconds for `Timeout`, but it is ultimately the administrator's decision how much time can be missed before the node should be marked `Down`. Typical F5 best practices say that this should be 3x the monitor `Interval` + 1 second, but this may not be a suitable value given the nature of this script. It is recommended that when this script is deployed, that `LOG_LEVEL` `ERROR` be set and monitored for a few days to make sure `Timeout` is neither too short nor too long.
+
+#### Monitor `Description`
+It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
+
+#### Monitor `Alias Service Port`
+If your pool uses a wildcard (0) port for its members, you must assign the `Alias Service Port` as `443`. To set this value, you will need to switch the `Configuration` view from `Basic` to `Advanced`. You might see a warning when trying to change the monitor which reads `Cannot modify the address type of monitor /Common/<monitor name>` or a warning trying to assign the monitor to the pool which says `The monitor /Common/<monitor name> has a wildcard destination service and cannot be associated with a node that has a zero service.`.
+
 ### ClearPass API Client
 #### Grant Type
 Only "client credentials" are supported by the script.
@@ -81,81 +105,58 @@ It would be a best security practice to implement a locked down operator profile
 It is advisable to put a link to this repository in the description field of your API client since this README is the only source of documentation for the monitor.
 
 #### Token Lifetime
-Even though new tokens are being obtained from the subscriber, the token itself is still generated on the publisher and is therefore subject to replication delay. The subscriber does not store the token that is obtained during the API call to get a new token. Therefore, it is recommended that the lifetime of the token must be at least 30 seconds in order to overcome replication delay. In addition, the token lifetime and exceed both the monitor `Interval` and configured `BUFFER_TIME` (10 minutes/600 seconds by default).
-
-The default token lifetime of 8 hours is likely acceptable for most environments that don't have security requirements that dictate shorter token lifetimes.
+It is best practice to set the token lifetime to match the monitor `Interval`. Setting it shorter can result in false negatives (monitor fails when it should have succeeded). The lifetime can be longer, but there is no need for this.
 
 ### Operator Profile:
 The operator profile assigned to the API Client must have the below permissions:
 - **API Services**: Set to `Custom`
     * `Allow API Access`: Choose `Allow Access`.
-- **Platform**: Set to `Custom`
-    * `Import Configuration`: Set to `Read Only`.
 
 No other permissions are required for the API Client operator profile.
 
-### BIG-IP Monitor Configuration:
-#### Monitor `Interval` and `Timeout`
-The default monitor configuration sets a 5-second `Interval`, a setting the script inherently assumes. However, if there's a need to modify the monitor `Interval`, it's critical to define a variable called `MON_INTERVAL` that matches the desired `Interval`. This adjustment is crucial as the script determines the freshness of the replication timestamp relative to the BIG-IP system time, but there is no mechanism for the script to determine the monitor `Interval` from the F5 automatically. Given that ClearPass only refreshes the replication timestamp every 3 minutes, we allow for 3 minutes + the monitor `Interval` + 5 seconds (a hard coded value to account for clock variances) to consider if the maximum replication timestamp in the cluster is new enough.
+## Script Behavior
+1. First, the script will check to see if both `ENCRYPTED_SECRET` and `DECRYPTION_KEY` are set. If so, the script will decrypt the client secret, and if not, the script will use a plaintext secret.
+2. Once the secret is found, a starting time is recorded, and an OAuth request will be made using the client ID and secret as credentials.
+3. When a token is returned, an end time is calculated to see how much time elapsed requesting the token.
+4. The script will then sleep for `MAX_SKEW` minus the elapsed time above (if `MAX_SKEW` is 15.0s and it took 800ms to get the token, the script sleeps for 14.2 seconds).
+5. After the sleep time, the script will then attempt to make a generic API call using the token. In the response we are expecting to find the Client ID. If this is found, the node is marked `Up`. If not, the script will log the failure in `/var/log/ltm` if `LOG_LEVEL` is at least set to `ERROR`.
 
-For example, if the monitor `Interval` is 10 seconds, you should set the variable `MON_INTERVAL` to 10, and a replication timestamp older than 3 minutes and 15 seconds will be considered invalid.
+## Secret Encryption
+Using a plaintext secret is recommended only for initial setup and troubleshooting purposes. It is not recommended to use a plaintext secret long-term in production as this secret will be visible to F5 support if a qkview is uploaded. Once a plaintext secret is working correctly, follow these steps to switch to an encrypted secret.
 
-The monitor `Interval` must be at least 2 seconds, but it not recommended to reduce this lower than 5 seconds. It **must** also be _less_ than `BUFFER_TIME`.
+First generate a random character decryption key at least 32 characters long. Save this to a text file, then upload it to your F5 as an iFile (`System > File Management > iFile List`). It is critical to give this file a highly unique name because iFiles get stored on the local file system with a randomized suffix (e.g., `my_key.key` becomes `:Common:my_key.key_64841_1`). The script will only select one match as there is no way to differentiate which match is correct if multiple are found.
 
-ClearPass only updates the replication interval timestamp every 3 minutes (180 seconds). Therefore, the best practice for this monitor is 181 second `Timeout`. This is because we want to avoid the situation where multiple nodes are marked as `Down` for several minutes simply because of a single reading where nodes were 15 seconds behind (this does happen from time to time).
+Now, log into the bash shell of your F5 to run an OpenSSL command. It is recommended to do this on the F5 itself as it has been observed that a different system running OpenSSL may generate a different encrypted key.
 
-Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 to 185 seconds between the subscriber and the rest of the cluster. This race condition will cause the monitor to fail that `Interval`. However, at the next `Interval`, the monitor will succeed because the replication timestamps will be updated. This is another reason why it is important to adhere to the best practice of this script by setting the monitor `Timeout` to 181.
+Run the command `echo '<your secret>' | openssl enc -aes-256-cbc -base64 -k '<your key>'`. The output will be broken into two lines. Remove the blank line and use this as your `ENCRYPTED_SECRET`. Mind the single quotes around your secret and key.
 
-#### Monitor `Description`
-It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
+To test the reverse of this process (decryption), run the command `echo '<your encrypted secret>' | openssl enc -aes-256-cbc -d -a -k '<your key>'`. The output should be your secret. This is the exact command used by the script.
 
-#### Monitor `Variables`
-- `CLIENT_SECRET`: Mandatory. Client's secret key for API authentication. This will be visible in clear text in the current version of this script.
-- `CLIENT_ID`: Mandatory. Client ID name for ClearPass API authentication.
-- `BUFFER_TIME`: Time buffer for token renewal. If a token is set to expire in less time than this variable, a new token will be retrieved and stored for future use. 10 minutes (600 seconds) by default if not specified. **Must** be _less_ than token lifetime configured on the API client and greater than the monitor `Interval`. Recommended minimum of 25 seconds to overcome replication delay.
-- `MON_INTERVAL`: Interval for monitoring in seconds. **Must** match the internal configured on the monitor itself; see `Monitor Interval and Timeout` section. 5 seconds by default if not specified. **Must** be _less_ than the token lifetime and greater than 1. Not recommended to be less than 5.
-
-#### Monitor `Alias Service Port`
-If your pool uses a wildcard (0) port for its members, you must assign the `Alias Service Port` as `443`. To set this value, you will need to switch the `Configuration` view from `Basic` to `Advanced`. You might see a warning when trying to change the monitor which reads `Cannot modify the address type of monitor /Common/<monitor name>` or a warning trying to assign the monitor to the pool which says `The monitor /Common/<monitor name> has a wildcard destination service and cannot be associated with a node that has a zero service.`.
-
-## Behavior and Error Detection
-
-The script only uses "client credentials" authentication, so a reauth token is not used. The token file and its expiration epoch are stored in `/var/tmp/<name-of-monitor>-token.json`.
-
-When the script loads, the script will look in its token file for an existing unexpired token. If a valid token is unavailable, a new token will be retrieved using OAuth. A new token will also be obtained if the expiration of the existing token is within `BUFFER_TIME`, but the oldest token will always be used until 5 seconds before expiration. 
-
-The script then makes a call to the ClearPass server to retrieve the last replication timestamp for each node in the cluster. If the last replication timestamp of the ClearPass server in question is less than 10 seconds older than the highest replication timestamp in the cluster, AND the highest replication timestamp is newer than 3 minutes, 5 seconds + `MON_INTERVAL` based on the system clock of the F5, the monitor will mark the node as `Up`.
-
-The publisher will always be marked as `Up` if the API call was successful.
-
-## Limitations
-- The script does support encrypted client secrets currently. The client secret will be visible in plain text to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth. Secret encryption will be available in a future version. Regardless, it is strongly recommended to set an Operator Profile with the minimum required permissions on the API client so that the secret cannot be used for any other purpose.
-- Monitor `Interval` must be passed manually to the script using the `MON_INTERVAL` variable as there is no way to obtain this information automatically, and because the script is dependant on this value.
-- The script will not attempt to obtain a new token if it receives any HTTP 4xx errors as replication delay can cause newly generated valid tokens to not yet be available on the subscriber.
-- If there's a change in token lifetime (for example, changing settings on the API Client configuration will invalidate existing tokens), the token file must be deleted manually. The token file is located in `/var/tmp/<name of monitor>-token.json`. Alternatively, you could wait for the token to reach its scheduled expiration time, but this could take a long time depending on how much time was left on the original token. An invalidated token will cause the script to throw an HTTP 4xx error (note the previous limitation).
-- The BIG-IP only has python 2.7 available, and it is not easy to import external modules.
-- ClearPass only updates the Last Replication Timestamp once every 3 minutes. This implies that the maximum amount of time it potentially takes for a server to be marked `Down` is 3 minutes. Therefore, make sure this isn't the only monitor in your resource pool.
-- Updating the ClearPass infrastructure will cause databases to be out of sync for a while. It may make sense to disable the monitor in each ClearPass zone during a maintenance window so that the entire infrastructure doesn't get flagged as `Down` simultaneously.
-- Very rarely, the script will execute the moment before the replication interval gets updated, and will show a time difference of 180 or 185 seconds between the subscriber and the rest of the cluster. This race condition will cause the monitor to fail for that `Interval`. However, at the next `Interval`, the monitor will succeed. Therefore, it is important to adhere to the best practice of this script by setting the monitor `Timeout` to 181. See the `Monitor Interval and Timeout` section of this README for more information.
+Now set your `ENCRYPTED_SECRET` variable in the monitor to the OpenSSL output (blank line removed). Next, set the `DECRYPTION_KEYFILE` variable to the name of your iFile containing the key. Note that the automatically prepended `:Common:` prefix in the filename is already accounted for in the script, so do not specify this as part of the key file name. Simply match the iFile name that is visible in the UI.
 
 ## Troubleshooting
-Check the `/var/log/ltm` logs for detailed information on script errors or issues. This is the most useful resource for checking why a node is failing its healthcheck. Use `tail -f /var/log/ltm` from the bash shell to watch logs in real time. Note that the `/var/log/ltm` log is used even if the BIG-IP is not provisioned for LTM.
+First, set `LOG_LEVEL` to `DEBUG`. Once set, check the `/var/log/ltm` logs for detailed information on script errors or issues. This is the most useful resource for checking why a node is failing its healthcheck. Use `tail -f /var/log/ltm` from the bash shell to watch logs in real time, or `cat /var/log/ltm` to see all logs since the logfile was last wiped. Note that the `/var/log/ltm` log is used even if the BIG-IP is not provisioned for LTM.
 
 The script will mark a node `Down` for any of the following reasons:
 - `HTTP error`: Seen for several reason:
-    * Insufficient permissions on the API Client operator profile
-    * Out of sync nodes that don't have the most recent tokens from the publisher
-    * A very new token was generated and is not yet replicated to the subscriber
+    * Out of sync nodes that don't have the most recent tokens from the publisher (this is what we are trying to detect)
     * Tokens were invalidated due to changes on the API client
-    * Either CLIENT_ID or CLIENT_SECRET are missing or invalid
+    * Either `CLIENT_ID` or `CLIENT_SECRET` are missing or invalid, or decryption of the encrypted secret produced the wrong result
 - `URL Error`: Usually happens if the node hasn't started all of its services, or is hard down
 - `Timeout`: Caused by lack of response for an HTTP request for a token or replication timestamp, and no ICMP message received to flag a `URL Error`
-- `SSL Error`: Seen occassionally, still debugging
+- `SSL Error`: Seen occassionally. Something went wrong trying to set up the HTTPS connection between the F5 and ClearPass.
 - Unhandled reasons: Script fails to detect a known failure scenario
 
-Since the monitor will run every few seconds or minutes anyway, the script does not attempt to recover from any errors, including HTTP 4xx errors, and will mark the node `Down`. This is because a 4xx error is returned if a brand new token is generated and used immediately, prior to cluster replication.
+If troubleshooting an issue where a plaintext secret works, but the encrypted secret does not, run the command `echo '<your encrypted secret>' | openssl enc -aes-256-cbc -d -a -k '<your key>'` on the bash shell of the F5 itself to verify that the secret is being decrypted as expected. Note that if the secret was encrypted on a device other than one of your production F5s, the encrypted version may not be the same as if it was done on the F5. Refer to the `Secret Encryption` section for more details.
 
-Under normal behavior, there should never be more than 2 tokens at a time in the token file, but if the token lifetime is less than `BUFFER_TIME`, the token file will fill with multiple tokens. This scenario isn't harmful as it has virtually zero chance to fill the disk, and because the script will still automatically find the oldest valid token delete expired tokens, but it is worth noting for troubleshooting purposes.
+## Limitations
+- A plaintext `CLIENT_SECRET` will be visible in plain text to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth. Secret encryption is strongly recommended. Regardless, it is strongly recommended to set an Operator Profile with the minimum required permissions on the API client so that the secret cannot be used for any other purpose even if the secret is compromised.
+- The BIG-IP only has python 2.7 available, and it is not easy to import external modules.
+
+## Other Considerations
+- Updating the ClearPass infrastructure will cause databases to be out of sync for a while. It may make sense to disable the monitor in each ClearPass zone during a maintenance window so that the entire infrastructure doesn't get flagged as `Down` simultaneously.
+- Pick a meaningful value for `MAX_SKEW`. This means we have to consider factors like Batch Replication Interval and CoA delays (potentially other time sensitive pieces of ClearPass). If using the ClearPass default Batch Replication Interval of 5 seconds, a `MAX_SKEW` of 5 seconds or less would always fail. Some solutions also use CoA, and the timing of the CoA packet might be dependant on a synchronized node. As such, CoA delays might be over 2x the Batch Replication interval, and it would make sense to set the `MAX_SKEW` to match the CoA delay.
+- Authentication failover behavior of the NADs should also be considered. Current versions of Mist Wi-Fi will failover to the next RADIUS server if the existing F5 Virtual Server IP goes down due to sync issues. Therefore, to prevent a complete outage, a last resort RADIUS IP should be configured which points to ClearPass directly. Make sure you understand what will happen to your NADs if this monitor starts marking your Virtual Servers `Down`, and have the appropriate failover configuration in place.
 
 ## Known Issues
 * In our test environment, the 1.0 version of the script did not work as expected on a GTM-only BIG-IP.
