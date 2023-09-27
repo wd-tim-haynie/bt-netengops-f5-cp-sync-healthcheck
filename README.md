@@ -58,7 +58,7 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
         - For `External Program`, select your script file (`f5-cp-sync-check.py` if you named it the same as the filename in the previous step).
         - For `Interval`, set 20.
         - For `Timeout`, set 120.
-        - Within `Variables`, type `CLIENT_ID` (remember it's case sensitive) for the Name. Use the API Client name you earlier set in ClearPass as the Value (e.g., `F5_CP_SYNC_HEALTHCHECK`), then press `Add`.
+        - Within `Variables`, type `CLIENT_ID` for the Name. Use the API Client name you earlier set in ClearPass as the Value (e.g., `F5_CP_SYNC_HEALTHCHECK`), then press `Add`. Note that everything is case sensitive.
         - For the next variable, type `CLIENT_SECRET` in the Name field. Paste the secret you saved from ClearPass in the `Value` section, then click `Add`.
         - If using a wildcard (0) port for pool members, switch `Configuration` from `Basic` to `Advanced`, then set the `Alias Service Port` to `443`.
         - Click `Finished`.
