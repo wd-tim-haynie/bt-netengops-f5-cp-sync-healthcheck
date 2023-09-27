@@ -35,7 +35,7 @@ These steps are designed to quickly set up the healthcheck. Please note that thi
         - In the `Description` field, put a link to this repository as it is the only source of documentation for the monitor.
         - Ensure the `Enabled` option is checked.
         - Set the `Operating Mode` to `ClearPass REST API - this client will be utilized for API calls to ClearPass`.
-        - Set `Operator Profile` to `Super Administrator` (You can refine this to a more restricted profile later on).
+        - Set `Operator Profile` to `Super Administrator` (You should refine this to a more restricted profile later on).
         - Choose `Grant Type: Client credentials`.
         - Store the `Client Secret` in a text editor for later. Treat this secret like you would any other password.
     * Click `Create API Client`.
