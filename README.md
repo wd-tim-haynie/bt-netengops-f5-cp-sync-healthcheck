@@ -20,9 +20,8 @@ In some environments, it is possible that synchronization is not critical, and t
 
 ## Requirements
 
-1. **NTP:** The script checks whether the replication timestamp is within the range of the F5. It's imperative that the F5 and ClearPass clocks are synchronized using NTP.
-2. **API Client Creation:** As the script makes calls to the API, an API client needs to be set up on ClearPass. This client can be allocated an operator profile with minimal permissions to ensure security.
-3. **HTTPS communication:** The API calls are made using HTTPS over port 443. This will need to be allowed through any firewalls that sit between the F5 and ClearPass node.
+1. **API Client Creation:** As the script makes calls to the API, an API client needs to be set up on ClearPass. This client can be allocated an operator profile with minimal permissions to ensure security.
+2. **HTTPS communication:** The API calls are made using HTTPS over port 443. This will need to be allowed through any firewalls that sit between the F5 and ClearPass node.
 
 ## Quick Setup
 
