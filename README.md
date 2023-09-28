@@ -141,8 +141,8 @@ First, set `LOG_LEVEL` to `DEBUG`. Once set, check the `/var/log/ltm` logs for d
 The script will mark a node `Down` for any of the following reasons:
 - `HTTP error`: Seen for several reason:
     * Out of sync nodes that don't have the most recent tokens from the publisher (this is what we are trying to detect)
-    * Tokens were invalidated due to changes on the API client
     * Either `CLIENT_ID` or `CLIENT_SECRET` are missing or invalid, or decryption of the encrypted secret produced the wrong result
+    * Tokens were invalidated due to changes on the API client configuration
 - `URL Error`: Usually happens if the node hasn't started all of its services, or is hard down
 - `Timeout`: Caused by lack of response for an HTTP request for a token or replication timestamp, and no ICMP message received to flag a `URL Error`
 - `SSL Error`: Seen occassionally. Something went wrong trying to set up the HTTPS connection between the F5 and ClearPass.
