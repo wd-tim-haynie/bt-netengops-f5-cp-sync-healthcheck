@@ -131,7 +131,7 @@ Now, log into the bash shell of your F5 to run an OpenSSL command. It is recomme
 
 Run the command `echo '<your secret>' | openssl enc -aes-256-cbc -base64 -k '<your key>'`. The output will be broken into two lines. Remove the blank line and use this as your `ENCRYPTED_SECRET`. Mind the single quotes around your secret and key.
 
-To test the reverse of this process (decryption), run the command `echo '<your encrypted secret>' | openssl enc -aes-256-cbc -d -a -k '<your key>'`. The output should be your secret. This is the exact command used by the script.
+To test the reverse of this process (decryption), run the command `echo '<your encrypted secret>' | openssl enc -aes-256-cbc -d -a -k '<your key>'`. The output should be your secret. This is the exact command used by the script. If this fails, it may be because your key contains a character which shouldn't be used (like a single or double quotation mark).
 
 Now set your `ENCRYPTED_SECRET` variable in the monitor to the OpenSSL output (blank line removed). Next, set the `DECRYPTION_KEYFILE` variable to the name of your iFile containing the key. Note that the automatically prepended `:Common:` prefix in the filename is already accounted for in the script, so do not specify this as part of the key file name. Simply match the iFile name that is visible in the UI.
 
@@ -152,12 +152,12 @@ If troubleshooting an issue where a plaintext secret works, but the encrypted se
 
 ## Limitations
 - A plaintext `CLIENT_SECRET` will be visible in plain text to anyone who can view the configuration, and will be bundled as part of a qkview and visible by F5 if uploaded to iHealth. Secret encryption is strongly recommended. Regardless, it is strongly recommended to set an Operator Profile with the minimum required permissions on the API client so that the secret cannot be used for any other purpose even if the secret is compromised.
-- The BIG-IP only has python 2.7 available, and it is not easy to import external modules.
+- The BIG-IP only has python 2.7 available, and it is not easy to import external modules. Therefore, OpenSSL is used by the script and is called as a subprocess to decrypt the secret. This theoretically makes the script vulernable to shell injection exploits, although someone with access to the F5 certainly has other means to create network issues without resorting to something this complicated.
 
 ## Other Considerations
 - Updating the ClearPass infrastructure will cause databases to be out of sync for a while. It may make sense to disable the monitor in each ClearPass zone during a maintenance window so that the entire infrastructure doesn't get flagged as `Down` simultaneously.
 - Pick a meaningful value for `MAX_SKEW`. This means we have to consider factors like Batch Replication Interval and CoA delays (potentially other time sensitive pieces of ClearPass). If using the ClearPass default Batch Replication Interval of 5 seconds, a `MAX_SKEW` of 5 seconds or less would always fail. Some solutions also use CoA, and the timing of the CoA packet might be dependant on a synchronized node. As such, CoA delays might be over 2x the Batch Replication interval, and it would make sense to set the `MAX_SKEW` to match the CoA delay.
-- Authentication failover behavior of the NADs should also be considered. Current versions of Mist Wi-Fi will failover to the next RADIUS server if the existing F5 Virtual Server IP goes down due to sync issues. Therefore, to prevent a complete outage, a last resort RADIUS IP should be configured which points to ClearPass directly. Make sure you understand what will happen to your NADs if this monitor starts marking your Virtual Servers `Down`, and have the appropriate failover configuration in place.
+- Authentication failover behavior of the NADs should also be considered. Most solutions failover to the next RADIUS server IP or hostname if the existing F5 Virtual Server IP goes down due to sync issues. Therefore, to prevent a complete outage, a last resort RADIUS IP should be configured which points to ClearPass directly (bypassing F5 and the monitor). Ideally, the last resort should be the publisher itself if possible since it is always in sync. Make sure you understand what will happen to your NADs if this monitor starts marking your Virtual Servers `Down`, and have the appropriate failover configuration in place.
 
 ## Known Issues
 * In our test environment, the 1.0 version of the script did not work as expected on a GTM-only BIG-IP.
