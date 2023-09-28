@@ -8,7 +8,7 @@ To address this, this F5 external health monitor proactively removes ClearPass s
 
 This README serves as a detailed guide on utilizing, deploying, and troubleshooting the ClearPass Sync Healthcheck Monitor script.
 
-The mechanism to determine whether the node is in sync is straightforward. First, an API call is made to generate an OAuth token based on client credentials (client ID and secret). Once the token is received by the F5, the script sleeps for a configurable amount of time which represents the maximum allowed sync skew time. After the sleep time expires, the script makes a 2nd call using to check the status of its new token. If the 2nd API call is successful, the monitor will mark the node `Up`. Detailed logging and the ability to use an encrypted secret are configurable.
+The mechanism to determine whether the node is in sync is straightforward. First, an API call is made to generate an OAuth token based on client credentials (client ID and secret). Once the token is received by the F5, the script sleeps for a configurable amount of time which represents the maximum allowed sync skew time. After the sleep time expires, the script makes a 2nd call using to check the status of its new token. If the 2nd API call is successful, the monitor will mark the node `Up`. Detailed logging and the ability to use an encrypted secret are configurable. The rigorous error-handling mechanisms of the script ensure that a server is only recognized as `Up` when synchronization is verified within maximum allowed skew time.
 
 It is advisable to put a link to this repository in the description field of your monitor and the description field of the API client since this README is the only source of documentation for the monitor.
 
@@ -120,7 +120,7 @@ No other permissions are required for the API Client operator profile.
 4. The script will then sleep for `MAX_SKEW` minus the elapsed time above (if `MAX_SKEW` is 15.0s and it took 800ms to get the token, the script sleeps for 14.2 seconds).
 5. After the sleep time, the script will then attempt to make a generic API call using the token. In the response we are expecting to find the Client ID. If this is found, the node is marked `Up`. If not, the script will log the failure in `/var/log/ltm` if `LOG_LEVEL` is at least set to `ERROR`.
 
-It is important to note that the reason this check is valid is that the token that is returned to the F5 is not stored on the subscriber node until it is replicated during its standard batch replication. The rigorous error-handling mechanisms of the script ensure that a server is only recognized as `Up` when synchronization is verified within maximum allowed skew time.
+It is important to note that the reason this check is valid is that the token that is returned to the F5 is not stored on the subscriber node until it is replicated during its standard batch replication.
 
 ## Secret Encryption
 Using a plaintext secret is recommended only for initial setup and troubleshooting purposes. It is not recommended to use a plaintext secret long-term in production as this secret will be visible to F5 support if a qkview is uploaded. Once a plaintext secret is working correctly, follow these steps to switch to an encrypted secret.
