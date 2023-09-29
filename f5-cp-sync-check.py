@@ -2,7 +2,7 @@
 
 """
 f5-cp-sync-check.py
-Version 2.0 Sept. 27, 2023
+Version 2.1 Sept. 29, 2023
 https://github.com/wd-tim-haynie/bt-netengops-f5-cp-sync-healthcheck
 Author: Tim Haynie, CWNE #254, ACMX #508 https://www.linkedin.com/in/timhaynie/
 """
@@ -40,11 +40,8 @@ LOG_LEVEL = getenv("LOG_LEVEL", "CRITICAL").upper()
 RUN_I = getenv("RUN_I")
 CLIENT_SECRET = getenv("CLIENT_SECRET")
 CLIENT_ID = getenv("CLIENT_ID")
-MAX_SKEW = getenv("MAX_SKEW", 15.0)
 DECRYPTION_KEYFILE = getenv("DECRYPTION_KEYFILE")
 ENCRYPTED_SECRET = getenv("ENCRYPTED_SECRET")
-TIMEOUT = getenv("TIMEOUT", 2.4)
-
 
 def setup_logger():
     log_level = LOG_LEVEL_DICT.get(LOG_LEVEL, CRITICAL)  # default to CRITICAL logging if bad user input
@@ -66,12 +63,25 @@ LOGGER = setup_logger()
 LOGGER.debug("{} {}: {} monitor script initialized, debug logging enabled".format(NODE_NAME, NODE_IP, RUN_I))
 
 
+try:
+    MAX_SKEW = float(getenv("MAX_SKEW", 15.0))
+except TypeError:
+    LOGGER.warning("Invalid MAX_SKEW, setting to default of 15.0 seconds".format(NODE_NAME, NODE_IP))
+    MAX_SKEW = 15.0
+
+try:
+    TIMEOUT = float(getenv("TIMEOUT", 2.4))
+except TypeError:
+    LOGGER.warning("Invalid TIMEOUT, setting to default of 2.4 seconds".format(NODE_NAME, NODE_IP))
+    TIMEOUT = 2.4
+
+
 def main():
     token_req_start_time = time()
     HEADERS['Authorization'] = "Bearer " + request_to_get_token()
 
     # subtract the amount of time it took to get the token from the MAX_SKEW and sleep for that long
-    sleep_time = float(MAX_SKEW) - (time() - token_req_start_time)
+    sleep_time = MAX_SKEW - (time() - token_req_start_time)
 
     LOGGER.debug("{} {}: Token obtained. Sleeping for {} seconds".format(NODE_NAME, NODE_IP, sleep_time))
     sleep(sleep_time)
@@ -96,7 +106,7 @@ def main():
         LOGGER.error("{} {}: SSL Error occurred. Args: {}. Errno: {}. Strerror: {}. Full exception: {}".format(
             NODE_NAME, NODE_IP, e.args, getattr(e, 'errno', 'N/A'), getattr(e, 'strerror', 'N/A'), str(e)))
     except Exception as e:
-        LOGGER.error("{} {}: Unhandled Error using token: {}. Exception type: {}"
+        LOGGER.critical("{} {}: Unhandled Error using token: {}. Exception type: {}"
                      .format(NODE_NAME, NODE_IP, str(e), type(e).__name__))
 
 
@@ -127,7 +137,7 @@ def request_to_get_token():
                      .format(NODE_NAME, NODE_IP, e.args, getattr(e, 'errno', 'N/A'), getattr(e, 'strerror', 'N/A'),
                              str(e)))
     except Exception as e:
-        LOGGER.error("{} {}: Unhandled Error getting token: {}. Exception type: {}"
+        LOGGER.critical("{} {}: Unhandled Error getting token: {}. Exception type: {}"
                      .format(NODE_NAME, NODE_IP, str(e), type(e).__name__))
     exit()  # exit if an exception occurred
 
