@@ -93,7 +93,7 @@ A good starting point for this monitor is `120` seconds for `Timeout`, but it is
 It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
 
 #### Monitor `Alias Service Port`
-If your pool uses a wildcard (0) port for its members, you must assign the `Alias Service Port` as `443`. To set this value, you will need to switch the `Configuration` view from `Basic` to `Advanced`. You might see a warning when trying to change the monitor which reads `Cannot modify the address type of monitor /Common/<monitor name>` or a warning trying to assign the monitor to the pool which says `The monitor /Common/<monitor name> has a wildcard destination service and cannot be associated with a node that has a zero service.`.
+If your pool uses a wildcard (0) port for its members, you must assign the `Alias Service Port` as `443`. To set this value, you will need to switch the `Configuration` view from `Basic` to `Advanced`. You might see a warning when trying to change the monitor which reads `Cannot modify the address type of monitor /Common/<monitor name>` or a warning trying to assign the monitor to the pool which says `The monitor /Common/<monitor name> has a wildcard destination service and cannot be associated with a node that has a zero service.`. If applying this script to a RADIUS virtual server, this might be required since you can't run a port 443 health check to port 1812.
 
 ### ClearPass API Client
 #### Grant Type
