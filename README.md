@@ -10,7 +10,7 @@ This README serves as a detailed guide on utilizing, deploying, and troubleshoot
 
 The mechanism to determine whether the node is in sync is straightforward. First, an API call is made to generate an OAuth token based on client credentials (client ID and secret). Once the token is received by the F5, the script sleeps for a configurable amount of time which represents the maximum allowed sync skew time. After the sleep time expires, the script makes a 2nd call using to check the status of its new token. If the 2nd API call is successful, the monitor will mark the node `Up`. Detailed logging and the ability to use an encrypted secret are configurable. The rigorous error-handling mechanisms of the script ensure that a server is only recognized as `Up` when synchronization is verified within maximum allowed skew time.
 
-It is advisable to put a link to this repository in the description field of your monitor and the description field of the API client since this README is the only source of documentation for the monitor.
+It is advisable to put a link to this repository in the description field of your monitor and the description field of the ClearPass API client, pool, virtual server, and monitor since this README is the only source of documentation for the monitor.
 
 ## Intended Usage and Architecture Planning
 
