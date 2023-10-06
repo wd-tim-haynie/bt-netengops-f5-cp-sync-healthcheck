@@ -125,7 +125,7 @@ No other permissions are required for the API Client operator profile.
 It is important to note that the reason this check is valid is that the token that is returned to the F5 is not stored on the subscriber node until it is replicated from the publisher during standard batch replication.
 
 ## Secret Encryption
-Using a plaintext secret is recommended only for initial setup and troubleshooting purposes. It is not recommended to use a plaintext secret long-term in production as this secret will be visible to F5 support if a qkview is uploaded. Once a plaintext secret is working correctly, follow these steps to switch to an encrypted secret.
+Using a plaintext secret is recommended only for initial setup and troubleshooting purposes. It is not recommended to use a plaintext secret long-term in production as this secret will be visible to F5 support if a qkview is uploaded to iHealth. Once a plaintext secret is working correctly, follow these steps to switch to an encrypted secret.
 
 First generate a random character decryption key at least 32 characters long. Save this to a text file, then upload it to your F5 as an iFile (`System > File Management > iFile List`). It is critical to give this file a highly unique name because iFiles get stored on the local file system with a randomized suffix (e.g., `my_key.key` becomes `:Common:my_key.key_64841_1`). The script will only select one match as there is no way to differentiate which match is correct if multiple are found.
 
