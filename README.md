@@ -122,7 +122,7 @@ No other permissions are required for the API Client operator profile.
 4. The script will then sleep for `MAX_SKEW` minus the elapsed time above (if `MAX_SKEW` is 15.0s and it took 800ms to get the token, the script sleeps for 14.2 seconds).
 5. After the sleep time, the script will then attempt to make a generic API call using the token. In the response we are expecting to find the Client ID. If this is found, the node is marked `Up`. If not, the script will log the failure in `/var/log/ltm` if `LOG_LEVEL` is at least set to `ERROR`.
 
-It is important to note that the reason this check is valid is that the token that is returned to the F5 is not stored on the subscriber node until it is replicated during its standard batch replication.
+It is important to note that the reason this check is valid is that the token that is returned to the F5 is not stored on the subscriber node until it is replicated from the publisher during standard batch replication.
 
 ## Secret Encryption
 Using a plaintext secret is recommended only for initial setup and troubleshooting purposes. It is not recommended to use a plaintext secret long-term in production as this secret will be visible to F5 support if a qkview is uploaded. Once a plaintext secret is working correctly, follow these steps to switch to an encrypted secret.
