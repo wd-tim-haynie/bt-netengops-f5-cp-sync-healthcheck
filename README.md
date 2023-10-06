@@ -12,11 +12,13 @@ The mechanism to determine whether the node is in sync is straightforward. First
 
 It is advisable to put a link to this repository in the description field of your monitor and the description field of the API client since this README is the only source of documentation for the monitor.
 
-## Intended Usage
+## Intended Usage and Architecture Planning
 
 This script and the monitor object it gets associated with are intended for use to monitor ClearPass nodes in a GTM/LTM resource pool where cluster synchronization is critical for their authentication purposes. Commonly, this would include any server which provides authentication service for Guest or Onboard users and devices, or any service that relies on an up-to-date Endpoint database. These are just examples, and there may be other use cases where synchronization is critical.
 
-In some environments, it is possible that synchronization is not critical, and this script would not provide value. If no services on the server refer to any local databases on ClearPass (e.g., the Endpoint database) that are critical to update receive updates in near-real-time, it may not be relevant if the server is out of sync as it will not impact the authentication result. One such example would be a server which only provides 802.1X service and authenticates a user against Active Directory using EAP-TLS, where the user certificates are signed and revocation status is maintained by a non-ClearPass CA.
+In some environments, it is possible that synchronization is not critical, and this script would not provide value, and may even be harmful. If no services on the server refer to any local databases on ClearPass (e.g., the Endpoint database) that are critical to update receive updates in near-real-time, it may not be relevant if the server is out of sync as it will not impact the authentication result. One such example would be a server which only provides 802.1X service and authenticates a user against Active Directory using EAP-TLS, where the user certificates are signed and revocation status is maintained by a non-ClearPass CA.
+
+Consider carefully your authentication architecture when deploying this script. If some parts of your authentication architecture depend on sync and some do not, use a different Wide IP, virtual server, and pool for these different use cases, applying the sync script only where it is relevant, even if the same ClearPass resources are in the different pools. It is potentially a bad situation if your entire ClearPass node goes `Down` even though some services are still operational and useable.
 
 ## Requirements
 
