@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The `f5-cp-sync-check.py` script serves as an F5 external monitor designed to verify the synchronization status of a whether a ClearPass node in an F5 resource pool is synchronized with the rest of the ClearPass cluster. This check goes above and beyond the recommended health checks proposed in the "Deploying CPPM with F5 BIG-IP Local Traffic Manager (LTM)" guide, which hasn't been updated since 2014. While ClearPass might appear to function seamlessly concerning RADIUS and HTTPS operations, synchronization issues due to server reboots or LAN/WAN outages can lead to problems authenticating guest accounts, registering devices, or other operations that are dependant on a synchronized cluster.
+The `f5-cp-sync-check.py` script serves as an F5 external monitor designed to determine whether a ClearPass node in an F5 resource pool is synchronized with the rest of the ClearPass publisher. This check goes above and beyond the recommended health checks proposed in the "Deploying CPPM with F5 BIG-IP Local Traffic Manager (LTM)" guide, which hasn't been updated since 2014. While ClearPass might appear to function seamlessly concerning RADIUS and HTTPS operations, synchronization issues due to server reboots or LAN/WAN outages can lead to problems authenticating guest accounts, registering devices, or other operations that are dependant on a synchronized cluster.
 
 To address this, this F5 external monitor script proactively removes out-of-sync ClearPass servers from their associated resource pools. By employing this script, you gain a robust method to monitor the sync status of the ClearPass infrastructure, surpassing the monitoring capabilities of the Aruba recommended RADIUS and HTTPS monitors.
 
