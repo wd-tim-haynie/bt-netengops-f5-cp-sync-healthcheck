@@ -20,10 +20,13 @@ In some environments, it is possible that synchronization is not critical, and t
 
 Consider carefully your authentication architecture when deploying this script. If some parts of your authentication architecture depend on sync and some do not, use a different Wide IP, virtual server, and pool for these different use cases, applying the sync script only where it is relevant, even if the same ClearPass resources are in the different pools. It is potentially a bad situation if your entire ClearPass node goes `Down` even though some services are still operational and useable.
 
+It is expected that a user of this script has a thorough understanding of F5 BIG-IP LTM and how to configure monitors, pools, and virtual servers.
+
 ## Requirements
 
 1. **API Client Creation:** As the script makes calls to the API, an API client needs to be set up on ClearPass. This client can be allocated an operator profile with minimal permissions to ensure security.
 2. **HTTPS communication:** The API calls are made using HTTPS over port 443. This will need to be allowed through any firewalls that sit between the F5 and ClearPass node.
+3. **Wildcard Service Port on RADIUS VS:** If you intend to use the monitor on a VS for RADIUS services, you will need your members to be set to a wildard (0) service port.
 
 ## Quick Setup
 
@@ -62,7 +65,7 @@ These steps are designed to quickly set up the monitor. Please note that this se
         - For `Timeout`, set 120.
         - Within `Variables`, type `CLIENT_ID` for the Name. Use the API Client name you earlier set in ClearPass as the Value (e.g., `F5_CP_SYNC_HEALTHCHECK`), then press `Add`. Note that everything is case sensitive.
         - For the next variable, type `CLIENT_SECRET` in the Name field. Paste the secret you saved from ClearPass in the `Value` section, then click `Add`.
-        - If using a wildcard (0) port for pool members, switch `Configuration` from `Basic` to `Advanced`, then set the `Alias Service Port` to `443`.
+        - If using a wildcard (0) port for pool members, switch `Configuration` from `Basic` to `Advanced`, then set the `Alias Service Port` to `443`. Note that this is required if you intend to use this monitor on a RADIUS VS.
         - Click `Finished`.
 
 4. **Assign to Pool:**
