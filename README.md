@@ -90,7 +90,9 @@ These steps are designed to quickly set up the monitor. Please note that this se
 The monitor `Interval` should be set to `MAX_SKEW` + 2x `TIMEOUT` + a small amount extra to account for time to initialize the script and network latency. If using all default configuration, set the interval to `20` (`MAX_SKEW` of 15.0s + 2x `TIMEOUT` 2.4s + 200ms to account for script init and latency).
 
 #### Monitor `Timeout`
-A good starting point for this monitor is `120` seconds for `Timeout`, but it is ultimately the administrator's decision how much time can be missed before the node should be marked `Down`. Typical F5 best practices say that this should be 3x the monitor `Interval` + 1 second, but this may not be a suitable value given the nature of this script. It is recommended that when this script is deployed, that `LOG_LEVEL` `ERROR` be set and monitored for a few days to make sure `Timeout` is neither too short nor too long.
+A good starting point for this monitor is `120` seconds for `Timeout`, but it is ultimately the administrator's decision how much time can be missed before the node should be marked `Down`. Typical F5 best practices say that this should be 3x the monitor `Interval` + 1 second, or 4 full runs of the monitor, but this may not be a suitable value given the nature of this script. It is recommended that when this script is deployed, that `LOG_LEVEL` `ERROR` be set and monitored for a few days to make sure Monitor `Timeout` is neither too short nor too long.
+
+It is important to note that the "Monitor `Timeout`" (this section) is different from the "Monitor Variable" named `TIMEOUT` (previous section). The `TIMEOUT` variable represents how long to wait for an HTTP response on any given run of the monitor, but the Monitor Timeout is how long we wait before we mark the virtual server down.
 
 #### Monitor `Description`
 It is advisable to put a link to this repository in the description field of your monitor since this README is the only source of documentation for the monitor.
