@@ -167,7 +167,7 @@ If troubleshooting an issue where a plaintext secret works, but the encrypted se
 - Authentication failover behavior of the NADs should also be considered. Most solutions failover to the next RADIUS server IP or hostname if the existing F5 Virtual Server IP goes down due to sync issues. Therefore, to prevent a complete outage, a last resort RADIUS IP should be configured which points to ClearPass directly (bypassing F5 and the monitor). Ideally, the last resort should be the publisher itself if possible since it is always in sync. Make sure you understand what will happen to your NADs if this monitor starts marking your Virtual Servers `Down`, and have the appropriate failover configuration in place.
 
 ## Known Issues
-* In our test environment, the 1.0 version of the script did not work as expected on a GTM-only BIG-IP.
+* In our test environment, the 1.0 version of the script did not work as expected on a GTM-only BIG-IP. Version 2.0 was not tested on GTM-only appliances and is therefore only validated to work on LTM-provisioned appliances.
 
 ## About
 
