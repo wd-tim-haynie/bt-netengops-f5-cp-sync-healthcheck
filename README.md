@@ -150,6 +150,8 @@ The script will mark a node `Down` for any of the following reasons:
     * Out of sync nodes that don't have the most recent tokens from the publisher (this is what we are trying to detect)
     * Either `CLIENT_ID` or `CLIENT_SECRET` are missing or invalid, or decryption of the encrypted secret produced the wrong result
     * Tokens were invalidated due to changes on the API client configuration
+    * Misconfiguration in your environment - try checking both publisher and subscriber applications logs for clues (from ClearPass Guest: `Administration > Support > Application Log`
+    * If you are using both MGMT and DATA ports on your subscriber, you need a static route to your publisher (and backup publisher) via the subscriber management port: `network ip add mgmt -d <Publisher MGMT IP>`
 - `URL Error`: Usually happens if the node hasn't started all of its services, or is hard down
 - `Timeout`: Caused by lack of response for an HTTP API request, and no ICMP message received to flag a `URL Error`
 - `SSL Error`: Seen occassionally. Something went wrong trying to set up the HTTPS connection between the F5 and ClearPass.
@@ -173,7 +175,9 @@ If troubleshooting an issue where a plaintext secret works, but the encrypted se
 
 The monitor has been tested on the following versions:
 - BIG-IP 14.1.5.4
+- BIG-IP 17.1.0.3
 - ClearPass 6.9.13
+- ClearPass 6.11.9
 
 ### Version History
 - Refer to the `CHANGELOG.md` file for a detailed version history.
